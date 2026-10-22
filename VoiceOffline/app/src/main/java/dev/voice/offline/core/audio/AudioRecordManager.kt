@@ -24,6 +24,7 @@ class AudioRecordManager(
     private val isRecording = AtomicBoolean(false)
     private var recordJob: Job? = null
     private var audioRecord: AudioRecord? = null
+    private val recordLock = Any()
 
     fun start(scope: CoroutineScope) {
         if (!isRecording.compareAndSet(false, true)) return
@@ -50,13 +51,13 @@ class AudioRecordManager(
                     bufferSize
                 )
 
+                synchronized(recordLock) { audioRecord = record }
                 if (record.state != AudioRecord.STATE_INITIALIZED) {
                     onError("Microphone is unavailable or recording permission was denied")
                     isRecording.set(false)
                     return@launch
                 }
 
-                audioRecord = record
                 record.startRecording()
 
                 if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
@@ -76,7 +77,9 @@ class AudioRecordManager(
                     }
                 }
             } catch (c: CancellationException) {
-                // Normal coroutine cancellation
+                throw c
+            } catch (_: SecurityException) {
+                onError("Microphone permission was denied or revoked")
             } catch (e: Exception) {
                 onError("Audio capture interrupted: ${e.message}")
             } finally {
@@ -92,16 +95,14 @@ class AudioRecordManager(
     }
 
     private fun stopInternal() {
+        val record = synchronized(recordLock) {
+            audioRecord.also { audioRecord = null }
+        }
         try {
-            audioRecord?.let {
-                if (it.state == AudioRecord.STATE_INITIALIZED) {
-                    try { it.stop() } catch (_: Exception) {}
-                    it.release()
-                }
-            }
+            try { record?.stop() } catch (_: Exception) {}
+            record?.release()
         } catch (_: Exception) {
         } finally {
-            audioRecord = null
             isRecording.set(false)
         }
     }
