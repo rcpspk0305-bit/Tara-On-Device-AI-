@@ -1,0 +1,64 @@
+name: Android checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: VoiceOffline
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Run unit tests, lint, and build
+        run: bash ./gradlew testOfflineDebugUnitTest lintOfflineDebug assembleOfflineDebug --no-daemon --console=plain --continue
+      - name: Require discovered unit tests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          reports = list(Path('app/build/test-results/testOfflineDebugUnitTest').glob('TEST-*.xml'))
+          suites = [ET.parse(report).getroot() for report in reports]
+          assert sum(int(suite.get('tests', 0)) for suite in suites) > 0, 'No unit tests executed'
+          assert all(int(suite.get('failures', 0)) + int(suite.get('errors', 0)) == 0 for suite in suites)
+          PY
+      - name: Upload reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: |
+            VoiceOffline/app/build/reports/
+            VoiceOffline/app/build/test-results/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-offline-debug
+          path: VoiceOffline/app/build/outputs/apk/offline/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
