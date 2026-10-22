@@ -4,12 +4,50 @@ import dev.voice.offline.ai.functioncalling.StructuredAction
 import dev.voice.offline.benchmark.ModelBenchmark
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
 
 class FunctionGemmaEngineTest {
+
+    @Test
+    fun propagatesCancellationFromAdapter() = runBlocking {
+        val adapter = object : LiteRtInferenceAdapter {
+            override val isReady = true
+            override fun initialize() = Unit
+            override suspend fun generate(prompt: String): Flow<String> = flow {
+                throw CancellationException("Service stopped")
+            }
+            override fun close() = Unit
+        }
+        try {
+            FunctionGemmaEngine(adapter).inferAction("open camera")
+            fail("Cancellation must propagate to the service")
+        } catch (_: CancellationException) {
+            // Expected: stopping the service must cancel inference.
+        }
+    }
+
+    @Test
+    fun timesOutWhileInitializingAdapter() = runBlocking {
+        val adapter = object : LiteRtInferenceAdapter {
+            override val isReady = false
+            override fun initialize() { Thread.sleep(60) }
+            override suspend fun generate(prompt: String): Flow<String> =
+                flowOf("<start_function_call>call:open_camera{}<end_function_call>")
+            override fun close() = Unit
+        }
+        assertTrue(FunctionGemmaEngine(adapter).inferAction("open camera", timeoutMs = 10) is FunctionGemmaResult.Error)
+    }
+
+    @Test
+    fun rejectsUnboundedGeneratedOutput() = runBlocking {
+        val adapter = FakeLiteRtAdapter("x".repeat(100_000))
+        assertTrue(FunctionGemmaEngine(adapter).inferAction("open camera") is FunctionGemmaResult.Error)
+    }
 
     private class FakeLiteRtAdapter(private val response: String) : LiteRtInferenceAdapter {
         override var isReady: Boolean = true

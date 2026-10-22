@@ -13,13 +13,13 @@ data class RawFunctionCall(
 object FunctionCallParser {
 
     private val CALL_REGEX = Regex(
-        """<start_function_call>\s*call:([a-zA-Z0-9_]+)\s*\{(.*?)\}\s*(?:<end_function_call>)?""",
+        """<start_function_call>\s*call:([a-zA-Z_][a-zA-Z0-9_]*)\s*\{(.*)\}\s*<end_function_call>""",
         RegexOption.DOT_MATCHES_ALL
     )
 
     fun parse(modelOutput: String): RawFunctionCall? {
         val trimmed = modelOutput.trim()
-        val match = CALL_REGEX.find(trimmed) ?: return null
+        val match = CALL_REGEX.matchEntire(trimmed) ?: return null
 
         val functionName = match.groupValues[1].trim()
         val argsBlock = match.groupValues[2].trim()
@@ -30,17 +30,24 @@ object FunctionCallParser {
 
         val arguments = mutableMapOf<String, String>()
         val argRegex = Regex(
-            """([a-zA-Z0-9_]+)\s*:\s*(?:<escape>(.*?)<escape>|([^,{}]+))""",
+            """\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(?:<escape>(.*?)<escape>|([^,{}<>]+))\s*""",
             RegexOption.DOT_MATCHES_ALL
         )
 
-        for (m in argRegex.findAll(argsBlock)) {
+        var position = 0
+        while (position < argsBlock.length) {
+            val m = argRegex.find(argsBlock, position) ?: return null
+            if (m.range.first != position) return null
             val key = m.groupValues[1].trim()
-            val escapedVal = m.groupValues[2]
-            val plainVal = m.groupValues[3]
-
-            val value = if (escapedVal.isNotEmpty()) escapedVal else plainVal.trim()
+            if (key in arguments) return null
+            val value = m.groups[2]?.value ?: m.groupValues[3].trim()
             arguments[key] = value
+            position = m.range.last + 1
+            if (position < argsBlock.length) {
+                if (argsBlock[position] != ',') return null
+                position++
+                if (position == argsBlock.length) return null
+            }
         }
 
         return RawFunctionCall(functionName, arguments)

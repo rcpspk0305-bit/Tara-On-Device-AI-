@@ -6,6 +6,9 @@ import dev.voice.offline.ai.functioncalling.FunctionSchemaValidator
 import dev.voice.offline.ai.functioncalling.StructuredAction
 import dev.voice.offline.ai.functioncalling.ValidationResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -37,17 +40,16 @@ class FunctionGemmaEngine(
 
     suspend fun inferAction(transcript: String, timeoutMs: Long = 5000L): FunctionGemmaResult =
         withContext(Dispatchers.Default) {
-            val startTime = System.currentTimeMillis()
+            val startTime = System.nanoTime()
             try {
-                if (!adapter.isReady) {
-                    adapter.initialize()
-                }
-
                 val prompt = FunctionCallingPromptBuilder.buildPrompt(transcript)
                 val outputBuilder = StringBuilder()
 
                 withTimeout(timeoutMs) {
+                    if (!adapter.isReady) adapter.initialize()
+                    ensureActive()
                     adapter.generate(prompt).collect { chunk ->
+                        require(outputBuilder.length + chunk.length <= 16_384) { "Inference output exceeds limit" }
                         outputBuilder.append(chunk)
                     }
                 }
@@ -59,7 +61,7 @@ class FunctionGemmaEngine(
                         rawOutput = rawOutput
                     )
 
-                val latency = System.currentTimeMillis() - startTime
+                val latency = (System.nanoTime() - startTime) / 1_000_000
 
                 when (val validation = FunctionSchemaValidator.validate(rawCall)) {
                     is ValidationResult.Valid -> FunctionGemmaResult.Success(
@@ -72,8 +74,12 @@ class FunctionGemmaEngine(
                         rawOutput = rawOutput
                     )
                 }
-            } catch (t: Throwable) {
-                FunctionGemmaResult.Error(t)
+            } catch (timeout: TimeoutCancellationException) {
+                FunctionGemmaResult.Error(timeout)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                FunctionGemmaResult.Error(error)
             }
         }
 

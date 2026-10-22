@@ -11,7 +11,28 @@ sealed interface ValidationResult {
  */
 object FunctionSchemaValidator {
 
+    private val allowedArguments = mapOf(
+        "make_call" to setOf("contact_name"),
+        "answer_call" to emptySet(),
+        "reject_call" to emptySet(),
+        "open_camera" to emptySet(),
+        "lock_screen" to emptySet(),
+        "take_notes" to setOf("content"),
+        "open_app" to setOf("package_name"),
+        "set_alarm" to setOf("hour", "minute", "label"),
+        "turn_flashlight_on" to emptySet(),
+        "turn_flashlight_off" to emptySet(),
+        "text_msg" to setOf("contact_name", "body"),
+        "read_notifications" to emptySet(),
+        "reply_to_notification" to setOf("notification_id", "body")
+    )
+
     fun validate(raw: RawFunctionCall): ValidationResult {
+        val allowed = allowedArguments[raw.name]
+            ?: return ValidationResult.Invalid("Unsupported or unknown function: ${raw.name}")
+        if (raw.arguments.keys.any { it !in allowed }) {
+            return ValidationResult.Invalid("Undeclared argument for ${raw.name}")
+        }
         return when (raw.name) {
             "make_call" -> {
                 val contact = raw.arguments["contact_name"]?.trim()
