@@ -7,6 +7,12 @@
 
 ## Overview
 
+**Implementation status:** The active service currently uses `EmulatedLiteRtInferenceAdapter`,
+a deterministic rule-based fallback. Native LiteRT-LM inference and FunctionGemma model loading
+are not integrated. Downloading a model does not enable inference in this checkout. JVM tests
+exercise the fallback and application logic; they do not establish model accuracy, device
+compatibility, hardware-backed security, or release readiness.
+
 **Voice** is an on-device, actions-first mobile agent for Android. Unlike conversational chatbots that require cloud infrastructure, Voice processes speech, understands intent, validates tool schemas, and executes native Android commands **100% locally on your phone**.
 
 - **Zero Cloud Latency & Zero Telemetry**: The `offline` flavor does not include `android.permission.INTERNET`. Your voice never leaves your device.
@@ -107,7 +113,7 @@ Detailed step-by-step instructions with SHA-256 verification and ADB commands ar
 - **Zero Network Traffic**: The `offline` flavor does not declare or request `android.permission.INTERNET`.
 - **Encrypted Local Storage**: Notes created via voice commands are encrypted using AES-256-GCM backed by hardware Keystore keys.
 - **Replay Protection**: High-risk commands expire automatically after 30 seconds (`PendingCommandStore`).
-- **Prompt Injection Defense**: 100% defense against adversarial prompt injections verified by automated evaluation tests (0.00% False Positive Rate).
+- **Input Validation**: Function-call parsing and schema validation have JVM regression coverage. The fixed evaluation dataset exercises the emulated adapter and is not a general prompt-injection guarantee.
 
 Read the complete security specification in [SECURITY.md](docs/SECURITY.md).
 

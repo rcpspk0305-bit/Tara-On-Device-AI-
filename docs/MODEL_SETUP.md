@@ -1,5 +1,10 @@
 # FunctionGemma 270M Model Setup & Installation
 
+**Not integrated:** The active service instantiates `EmulatedLiteRtInferenceAdapter` and does
+not load a FunctionGemma binary. The FunctionGemma instructions below are preparation for a
+future native adapter; copying a model to the device does not activate it. Its latency and
+memory figures are targets, not device measurements. Vosk model packaging is used today.
+
 This guide explains how to prepare, verify, and install Google's **FunctionGemma 270M Mobile Actions** model on your Android device for 100% offline, private tool calling.
 
 ---

@@ -8,7 +8,7 @@ Voice is engineered as a zero-trust, privacy-first mobile assistant. The applica
 1. **Zero Network Egress**: The offline build variant completely omits `android.permission.INTERNET`. No socket connections, DNS requests, HTTP transactions, or telemetry beacons can physically be executed.
 2. **Deterministic Tool Schema**: LLM output is never passed directly to system shells (`Runtime.getRuntime().exec()`) or evaluators. It is strictly parsed into immutable, typed Kotlin data structures.
 3. **Biometric Gate for High-Risk Actions**: Actions with external or destructive side effects (SMS, messaging replies, device locking) require interactive hardware biometric authentication.
-4. **Hardware-Backed Cryptography**: All security keys are generated in Android Keystore, backed by device `StrongBox` or `TEE` (Trusted Execution Environment).
+4. **Keystore Cryptography**: Keys are generated in Android Keystore. Hardware backing must be verified on the device; `KeystoreManager.getHardwareSecurityTier()` can report StrongBox, TEE, software, or unknown.
 
 ---
 
@@ -24,14 +24,14 @@ Adversaries or malicious ambient audio could attempt to hijack the assistant by 
 1. **Isolated Gemma Role Separation**:
    User input is strictly wrapped within the `<start_of_turn>user\n...\n<end_of_turn>` container. Developer instructions and tool schemas reside in `<start_of_turn>developer\n...\n<end_of_turn>`, which cannot be modified by user utterances.
 2. **Grammar Extraction Enforcement (`FunctionCallParser`)**:
-   The parser searches strictly for structured function call delimiters. Arbitrary text, shell code, or formatting commands are completely ignored.
+   The parser requires one complete structured function call and consumes every argument. Surrounding prose, truncated calls, duplicate keys, and malformed argument text are rejected.
 3. **Strict Whitelist Schema Validation (`FunctionSchemaValidator`)**:
    - Only 13 registered tool names are recognized.
    - Any function name not in the whitelist is rejected with `ValidationResult.Invalid`.
    - String arguments are length-bounded (e.g. `contact_name` <= 70 chars, `content` <= 2000 chars).
    - Numerical parameters are bounded by validation predicates (e.g. `hour in 0..23`, `minute in 0..59`).
 4. **Adversarial Evaluation Verification**:
-   The automated test suite in `EvaluationDatasetTest` verifies that high-risk injection attempts, format commands, and unrecognized calls produce a **0.00% False Positive Rate (FPR)**.
+   `EvaluationDatasetTest` exercises a fixed set of strings against the rule-based emulated adapter. It does not execute FunctionGemma and does not establish general resistance to prompt injection or native-action safety.
 
 ---
 
@@ -44,7 +44,7 @@ The app generates an Elliptic Curve key pair using the NIST P-256 curve:
 - Digest: `KeyProperties.DIGEST_SHA256`
 - Protection: `setUserAuthenticationRequired(true)`
 - Invalidated by Enrollment: `setInvalidatedByBiometricEnrollment(true)` (enrolling a new fingerprint immediately invalidates previous signing keys).
-- StrongBox: Requested on supported devices with fallback to TEE.
+- Hardware backing: device-dependent; StrongBox is not explicitly requested by this implementation.
 
 ### 3.2 BiometricPrompt Integration (`AuthorizationActivity`)
 - Enforces `BiometricManager.Authenticators.BIOMETRIC_STRONG` (Tier 3 biometric sensor: <0.002% False Acceptance Rate, hardware anti-spoofing).

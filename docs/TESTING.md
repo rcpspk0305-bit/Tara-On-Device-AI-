@@ -26,6 +26,12 @@ Voice follows strict Test-Driven Development (TDD) principles. Because the assis
 
 ## 3. Evaluation Dataset Results (57 Test Cases)
 
+These cases run against `EmulatedLiteRtInferenceAdapter`, a hand-written rule-based adapter.
+They do not run FunctionGemma, Vosk audio recognition, native actions, or real-device security.
+The metrics below describe this fixed synthetic dataset only and must not be presented as
+measured model accuracy or a guarantee against arbitrary prompt injection. Current results
+must be taken from a fresh Gradle test report.
+
 The evaluation suite validates the assistant against real-world test cases across:
 1. **Clear Direct Commands** (15 cases): Flashlight, Calls, SMS, Camera, Alarms, Notes, Apps.
 2. **Indian English Phrasing** (10 cases): "Torch on karo", "Papa ko call lagao", "Selfie kheecho", "Subah 6 baje ka alarm lagao", "Recharge phone".

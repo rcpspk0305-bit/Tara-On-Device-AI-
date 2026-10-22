@@ -20,9 +20,9 @@ real-device security/performance and Play-policy verification checklist below.
    `app/src/main/assets/vosk-model/`. Directory must contain `am/`, `conf/`, `graph/` and possibly `ivector/`.
 4. Import into Android Studio, let Gradle resolve dependencies at **build time**. There are deliberately
    no network permissions in the resulting application, and it does not download models at runtime.
-5. The Gradle wrapper JAR and scripts are not bundled: if using CLI, run `gradle wrapper --gradle-version 8.13`
-   from a locally installed compatible Gradle, then `./gradlew :app:assembleDebug` or the Windows equivalent.
-   Alternatively, generate wrapper in Android Studio.
+5. The Gradle 8.13 wrapper JAR and scripts are bundled. Run `./gradlew testOfflineDebugUnitTest
+   lintOfflineDebug assembleOfflineDebug` (Windows: `gradlew.bat`) from this directory.
+   `.github/workflows/android.yml` runs these same gates on pushes and pull requests.
 6. Install the app. Grant microphone permission, notification permission, and optional permissions only
    for the actions you want. Enable notification listener in Android settings for message replies,
    and enable the device administrator role for `lock screen`.
