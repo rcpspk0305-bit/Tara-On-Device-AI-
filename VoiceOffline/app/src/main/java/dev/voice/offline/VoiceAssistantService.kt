@@ -35,9 +35,15 @@ import dev.voice.offline.security.SensitiveActionPolicy
 import dev.voice.offline.service.AssistantState
 import dev.voice.offline.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,10 +66,16 @@ class VoiceAssistantService : Service() {
 
         private val _lastResultFlow = MutableStateFlow<String?>(null)
         val lastResultFlow: StateFlow<String?> = _lastResultFlow.asStateFlow()
+
+        internal fun reportActionResult(message: String) {
+            _lastResultFlow.value = message
+        }
     }
 
     private val isRunning = AtomicBoolean(false)
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var assistantJob: Job? = null
+    private val audioChunks = Channel<ShortArray>(4, BufferOverflow.DROP_OLDEST)
 
     private var audioRecordManager: AudioRecordManager? = null
     private var voskModel: Model? = null
@@ -130,10 +142,11 @@ class VoiceAssistantService : Service() {
     }
 
     private fun startAssistant() {
+        if (assistantJob?.isCompleted == false) return
         if (!isRunning.compareAndSet(false, true)) return
 
         _stateFlow.value = AssistantState.INITIALIZING
-        serviceScope.launch(Dispatchers.IO) {
+        assistantJob = serviceScope.launch(Dispatchers.IO) {
             try {
                 // Initialize offline models
                 val modelDir = AssetModelInstaller.install(applicationContext)
@@ -146,29 +159,51 @@ class VoiceAssistantService : Service() {
                 // Initialize FunctionGemma 270M adapter
                 val adapter = EmulatedLiteRtInferenceAdapter()
                 functionGemmaEngine = FunctionGemmaEngine(adapter)
+                currentCoroutineContext().ensureActive()
 
                 audioRecordManager = AudioRecordManager(
                     sampleRate = 16000,
-                    onAudioChunk = ::handleAudioChunk,
+                    onAudioChunk = { buffer, count ->
+                        if (isRunning.get()) audioChunks.trySend(buffer.copyOf(count))
+                    },
                     onError = { error ->
-                        _stateFlow.value = AssistantState.ERROR(error)
-                        notifyAlert(error)
+                        if (isRunning.get()) failAssistant(error)
                     }
                 )
 
                 _stateFlow.value = AssistantState.LISTENING
                 updateServiceNotification("Listening for ‘Hey Voice’...")
                 audioRecordManager?.start(serviceScope)
+                // One coroutine owns the recognizers, inference, and cleanup. Audio captured
+                // during inference is bounded, and native handles cannot close during decoding.
+                for (chunk in audioChunks) {
+                    currentCoroutineContext().ensureActive()
+                    if (!isRunning.get()) break
+                    handleAudioChunk(chunk, chunk.size)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
-                _stateFlow.value = AssistantState.ERROR("Initialization failed: ${e.message}")
-                notifyAlert("Failed to initialize offline models: ${e.message}")
-                stopAssistant()
+                failAssistant("Assistant failed: ${e.message}")
+            } finally {
+                isRunning.set(false)
+                audioRecordManager?.stop()
+                runCatching { wakeWordDetector?.close() }
+                runCatching { speechRecognizer?.close() }
+                runCatching { functionGemmaEngine?.close() }
+                runCatching { voskModel?.close() }
+                audioRecordManager = null
+                wakeWordDetector = null
+                speechRecognizer = null
+                functionGemmaEngine = null
+                voskModel = null
+                if (_stateFlow.value !is AssistantState.ERROR) _stateFlow.value = AssistantState.STOPPED
                 stopSelf()
             }
         }
     }
 
-    private fun handleAudioChunk(buffer: ShortArray, count: Int) {
+    private suspend fun handleAudioChunk(buffer: ShortArray, count: Int) {
         when (_stateFlow.value) {
             is AssistantState.LISTENING -> {
                 val detector = wakeWordDetector ?: return
@@ -211,65 +246,66 @@ class VoiceAssistantService : Service() {
         }
     }
 
-    private fun processTranscript(transcript: String) {
+    private suspend fun processTranscript(transcript: String) {
         _stateFlow.value = AssistantState.INFERENCING
         updateServiceNotification("Understanding: \"$transcript\"...")
 
-        serviceScope.launch(Dispatchers.Default) {
-            val engine = functionGemmaEngine
-            if (engine == null) {
-                returnToListening("Engine unavailable")
-                return@launch
-            }
+        val engine = functionGemmaEngine
+        if (engine == null) {
+            returnToListening("Engine unavailable")
+            return
+        }
 
-            when (val inferResult = engine.inferAction(transcript)) {
-                is FunctionGemmaResult.Success -> {
-                    dispatchAction(inferResult.action)
-                }
-                is FunctionGemmaResult.Rejected -> {
-                    returnToListening("Command not recognized: ${inferResult.reason}")
-                }
-                is FunctionGemmaResult.Error -> {
-                    returnToListening("Error during inference: ${inferResult.error.message}")
-                }
+        when (val inferResult = engine.inferAction(transcript)) {
+            is FunctionGemmaResult.Success -> {
+                dispatchAction(inferResult.action)
+            }
+            is FunctionGemmaResult.Rejected -> {
+                returnToListening("Command not recognized: ${inferResult.reason}")
+            }
+            is FunctionGemmaResult.Error -> {
+                returnToListening("Error during inference: ${inferResult.error.message}")
             }
         }
     }
 
     private fun dispatchAction(action: StructuredAction) {
-        val requiresBiometrics = securityPolicy.requiresBiometrics(action)
+        if (!isRunning.get()) return
 
-        if (requiresBiometrics) {
+        if (securityPolicy.requiresUserInteraction(action)) {
             _stateFlow.value = AssistantState.AUTHORIZING
-            requestUserAuthorization(action)
-            returnToListening("Action pending approval")
+            returnToListening(if (requestUserAuthorization(action)) "Action pending approval" else "Enable action approval notifications")
         } else {
             _stateFlow.value = AssistantState.EXECUTING
-            serviceScope.launch(Dispatchers.IO) {
-                val outcome = actionRegistry.execute(action)
-                _lastResultFlow.value = outcome.message
+            val outcome = actionRegistry.execute(action)
+            _lastResultFlow.value = outcome.message
 
-                if (outcome.isAccepted) {
-                    _stateFlow.value = AssistantState.CONFIRMING
-                    playAckChime()
-                } else {
-                    notifyAlert(outcome.message)
-                }
-                returnToListening(outcome.message)
+            if (outcome.isAccepted) {
+                _stateFlow.value = AssistantState.CONFIRMING
+                playAckChime()
+            } else {
+                notifyAlert(outcome.message)
             }
+            returnToListening(outcome.message)
         }
     }
 
     private fun returnToListening(statusMessage: String) {
-        serviceScope.launch(Dispatchers.Default) {
-            _stateFlow.value = AssistantState.LISTENING
-            speechRecognizer?.reset()
-            wakeWordDetector?.reset()
-            updateServiceNotification("Listening for ‘Hey Voice’ ($statusMessage)")
-        }
+        if (!isRunning.get()) return
+        while (audioChunks.tryReceive().isSuccess) { /* Discard audio captured during the action. */ }
+        speechRecognizer?.reset()
+        wakeWordDetector?.reset()
+        _stateFlow.value = AssistantState.LISTENING
+        updateServiceNotification("Listening for ‘Hey Voice’ ($statusMessage)")
     }
 
-    private fun requestUserAuthorization(action: StructuredAction) {
+    private fun requestUserAuthorization(action: StructuredAction): Boolean {
+        val manager = getSystemService(NotificationManager::class.java)
+        if (!manager.areNotificationsEnabled() ||
+            manager.getNotificationChannel(CHANNEL_ACTION)?.importance == NotificationManager.IMPORTANCE_NONE) {
+            _lastResultFlow.value = "Enable notifications and the Action Approvals channel to approve this command"
+            return false
+        }
         val token = PendingCommandStore.default.enqueue(action)
         val tapIntent = Intent(this, AuthorizationActivity::class.java).apply {
             putExtra("token", token)
@@ -288,12 +324,19 @@ class VoiceAssistantService : Service() {
             .setContentText("Tap to review and authorize ${action.functionName}. Expires in 30s.")
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setTimeoutAfter(30_000L)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setCategory(Notification.CATEGORY_STATUS)
             .build()
 
         val id = 100 + (token.hashCode() and Int.MAX_VALUE) % 10_000_000
-        getSystemService(NotificationManager::class.java).notify(id, notification)
+        return try {
+            manager.notify(id, notification)
+            true
+        } catch (_: SecurityException) {
+            PendingCommandStore.default.take(token)
+            false
+        }
     }
 
     private fun playAckChime() {
@@ -357,21 +400,27 @@ class VoiceAssistantService : Service() {
             .setContentText(message)
             .setAutoCancel(true)
             .build()
-        getSystemService(NotificationManager::class.java).notify(21, note)
+        runCatching { getSystemService(NotificationManager::class.java).notify(21, note) }
     }
 
     private fun stopAssistant() {
         isRunning.set(false)
-        audioRecordManager?.stop()
-        wakeWordDetector?.close()
-        speechRecognizer?.close()
-        functionGemmaEngine?.close()
-        voskModel?.close()
+        assistantJob?.cancel()
         _stateFlow.value = AssistantState.STOPPED
     }
 
+    private fun failAssistant(message: String) {
+        _lastResultFlow.value = message
+        _stateFlow.value = AssistantState.ERROR(message)
+        isRunning.set(false)
+        notifyAlert(message)
+        assistantJob?.cancel()
+        stopSelf()
+    }
+
     override fun onDestroy() {
-        stopAssistant()
+        isRunning.set(false)
+        assistantJob?.cancel()
         serviceScope.cancel()
         toneGenerator?.release()
         super.onDestroy()

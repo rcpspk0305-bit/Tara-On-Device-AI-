@@ -29,7 +29,7 @@ class ActionExecutorRegistry(private val context: Context) {
     private val appExecutor = AppActionExecutor(context)
 
     fun execute(action: StructuredAction): ExecutionResult {
-        return when (action) {
+        return try { when (action) {
             is StructuredAction.MakeCall -> callExecutor.makeCall(action)
             StructuredAction.AnswerCall -> callExecutor.answerCall()
             StructuredAction.RejectCall -> callExecutor.rejectCall()
@@ -43,6 +43,10 @@ class ActionExecutorRegistry(private val context: Context) {
             is StructuredAction.TextMsg -> messagingExecutor.sendText(action)
             StructuredAction.ReadNotifications -> notificationExecutor.readNotifications()
             is StructuredAction.ReplyToNotification -> notificationExecutor.replyToNotification(action)
+        } } catch (_: SecurityException) {
+            ExecutionResult.Failed("Permission or device policy denied")
+        } catch (error: Exception) {
+            ExecutionResult.Failed("Action could not be completed: ${error.message}")
         }
     }
 }
