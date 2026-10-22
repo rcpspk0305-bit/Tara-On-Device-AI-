@@ -7,12 +7,23 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
+import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import dev.voice.offline.R
 import dev.voice.offline.service.AssistantState
+import dev.voice.offline.ui.components.GeminiOrbView
+import dev.voice.offline.ui.theme.GeminiTheme
 
+/**
+ * Google Gemini-inspired Home screen for Voice assistant.
+ * Features the interactive pulsating Gemini Live Orb, state badges,
+ * Gemini prompt suggestion chips, and sleek on-device action cards.
+ */
 class HomeView(
     context: Context,
     private val onStartListening: () -> Unit,
@@ -20,10 +31,12 @@ class HomeView(
     private val onNavigate: (String) -> Unit
 ) : ScrollView(context) {
 
-    private val statusTextView: TextView
-    private val actionButton: Button
+    private val orbView: GeminiOrbView
+    private val stateBadge: TextView
+    private val actionButton: TextView
     private val lastResultCard: LinearLayout
     private val lastResultTextView: TextView
+    private var currentState: AssistantState = AssistantState.STOPPED
 
     init {
         layoutParams = ViewGroup.LayoutParams(
@@ -31,189 +44,427 @@ class HomeView(
             ViewGroup.LayoutParams.MATCH_PARENT
         )
         isFillViewport = true
+        overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 64, 48, 48)
+            setPadding(
+                GeminiTheme.dpToPx(context, 20f),
+                GeminiTheme.dpToPx(context, 24f),
+                GeminiTheme.dpToPx(context, 20f),
+                GeminiTheme.dpToPx(context, 32f)
+            )
             gravity = Gravity.CENTER_HORIZONTAL
         }
         addView(root)
 
-        // Brand Title
+        // 1. Header with Gemini Sparkle & Title
+        val headerRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, GeminiTheme.dpToPx(context, 6f))
+        }
+        root.addView(headerRow)
+
+        val sparkleIcon = ImageView(context).apply {
+            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_gemini_sparkle))
+            setColorFilter(GeminiTheme.GeminiBlue)
+            layoutParams = LinearLayout.LayoutParams(
+                GeminiTheme.dpToPx(context, 26f),
+                GeminiTheme.dpToPx(context, 26f)
+            ).apply {
+                setMargins(0, 0, GeminiTheme.dpToPx(context, 8f), 0)
+            }
+        }
+        headerRow.addView(sparkleIcon)
+
         val title = TextView(context).apply {
             text = "Voice"
-            textSize = 32f
-            setTypeface(null, Typeface.BOLD)
+            textSize = 28f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(GeminiTheme.TextPrimary)
+        }
+        headerRow.addView(title)
+
+        // Subtitle Pill
+        val badgeContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(
+                GeminiTheme.dpToPx(context, 12f),
+                GeminiTheme.dpToPx(context, 4f),
+                GeminiTheme.dpToPx(context, 12f),
+                GeminiTheme.dpToPx(context, 4f)
+            )
+            background = GeminiTheme.createPillDrawable(
+                context,
+                fillColor = Color.parseColor("#141620"),
+                strokeColor = GeminiTheme.BorderStroke,
+                strokeWidthDp = 1f
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, GeminiTheme.dpToPx(context, 24f))
+            }
+        }
+        root.addView(badgeContainer)
+
+        val badgeDot = View(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(GeminiTheme.GeminiMint)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                GeminiTheme.dpToPx(context, 6f),
+                GeminiTheme.dpToPx(context, 6f)
+            ).apply {
+                setMargins(0, 0, GeminiTheme.dpToPx(context, 6f), 0)
+            }
+        }
+        badgeContainer.addView(badgeDot)
+
+        val badgeText = TextView(context).apply {
+            text = "100% OFFLINE • FUNCTIONGEMMA 270M"
+            textSize = 10f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+            setTextColor(GeminiTheme.TextSecondary)
+            letterSpacing = 0.08f
+        }
+        badgeContainer.addView(badgeText)
+
+        // 2. Interactive Gemini Live Orb Center Stage
+        val orbSizePx = GeminiTheme.dpToPx(context, 210f)
+        orbView = GeminiOrbView(context) {
+            handleOrbToggle()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(orbSizePx, orbSizePx).apply {
+                setMargins(0, GeminiTheme.dpToPx(context, 8f), 0, GeminiTheme.dpToPx(context, 16f))
+            }
+        }
+        root.addView(orbView)
+
+        // 3. State Status Pill
+        stateBadge = TextView(context).apply {
+            text = "Offline • Tap orb to start"
+            textSize = 13f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+            setTextColor(GeminiTheme.TextSecondary)
+            gravity = Gravity.CENTER
+            setPadding(
+                GeminiTheme.dpToPx(context, 16f),
+                GeminiTheme.dpToPx(context, 8f),
+                GeminiTheme.dpToPx(context, 16f),
+                GeminiTheme.dpToPx(context, 8f)
+            )
+            background = GeminiTheme.createPillDrawable(
+                context,
+                fillColor = GeminiTheme.CardSurface,
+                strokeColor = GeminiTheme.BorderStroke,
+                strokeWidthDp = 1f
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, GeminiTheme.dpToPx(context, 20f))
+            }
+        }
+        root.addView(stateBadge)
+
+        // 4. Primary CTA Pill Button
+        val buttonDrawable = GeminiTheme.createGeminiGradientDrawable(context, cornerRadiusDp = 28f)
+        actionButton = TextView(context).apply {
+            text = "Start Offline Listening"
+            textSize = 15f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-        }
-        root.addView(title)
-
-        // Subtitle / Positioning
-        val subtitle = TextView(context).apply {
-            text = "Your phone. Your voice. Your control."
-            textSize = 14f
-            setTextColor(Color.parseColor("#9E9E9E"))
-            gravity = Gravity.CENTER
-            setPadding(0, 8, 0, 48)
-        }
-        root.addView(subtitle)
-
-        // Status Card
-        val statusCard = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(32, 32, 32, 32)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1E1E24"))
-                cornerRadius = 24f
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+            setPadding(
+                GeminiTheme.dpToPx(context, 28f),
+                GeminiTheme.dpToPx(context, 14f),
+                GeminiTheme.dpToPx(context, 28f),
+                GeminiTheme.dpToPx(context, 14f)
             )
-        }
-        root.addView(statusCard)
-
-        val statusLabel = TextView(context).apply {
-            text = "ASSISTANT STATUS"
-            textSize = 11f
-            setTextColor(Color.parseColor("#8E8E93"))
-            letterSpacing = 0.1f
-        }
-        statusCard.addView(statusLabel)
-
-        statusTextView = TextView(context).apply {
-            text = "STOPPED"
-            textSize = 22f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.parseColor("#FF5252"))
-            setPadding(0, 12, 0, 0)
-        }
-        statusCard.addView(statusTextView)
-
-        // Spacer
-        root.addView(View(context).apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 48)
-        })
-
-        // Prominent Start/Stop Action Button
-        actionButton = Button(context).apply {
-            text = "Start Offline Listening"
-            textSize = 16f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.BLACK)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#64B5F6"))
-                cornerRadius = 40f
-            }
-            setPadding(32, 28, 32, 28)
-            isAllCaps = false
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            setOnClickListener {
-                if (text == "Stop Listening") onStopListening()
-                else onStartListening()
-            }
-        }
-        root.addView(actionButton)
-
-        // Last Result Card
-        lastResultCard = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(32, 24, 32, 24)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#252836"))
-                cornerRadius = 20f
-            }
+            background = GeminiTheme.createRippleDrawable(context, buttonDrawable)
+            isClickable = true
+            isFocusable = true
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 36, 0, 0)
+                setMargins(0, 0, 0, GeminiTheme.dpToPx(context, 24f))
+            }
+            setOnClickListener {
+                handleOrbToggle()
+            }
+        }
+        root.addView(actionButton)
+
+        // 5. Prompt Suggestion Chips (Gemini style)
+        val chipsLabel = TextView(context).apply {
+            text = "TRY ASKING"
+            textSize = 11f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(GeminiTheme.TextTertiary)
+            letterSpacing = 0.12f
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(GeminiTheme.dpToPx(context, 4f), 0, 0, GeminiTheme.dpToPx(context, 10f))
+            }
+        }
+        root.addView(chipsLabel)
+
+        val chipsScroll = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = OVER_SCROLL_NEVER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, GeminiTheme.dpToPx(context, 24f))
+            }
+        }
+        val chipsContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        chipsScroll.addView(chipsContainer)
+        root.addView(chipsScroll)
+
+        fun addSuggestionChip(icon: String, phrase: String) {
+            val chip = TextView(context).apply {
+                text = "$icon  $phrase"
+                textSize = 13f
+                setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+                setTextColor(GeminiTheme.TextPrimary)
+                setPadding(
+                    GeminiTheme.dpToPx(context, 16f),
+                    GeminiTheme.dpToPx(context, 10f),
+                    GeminiTheme.dpToPx(context, 16f),
+                    GeminiTheme.dpToPx(context, 10f)
+                )
+                val chipBg = GeminiTheme.createCardDrawable(
+                    context,
+                    cornerRadiusDp = 20f,
+                    fillColor = GeminiTheme.CardSurface,
+                    strokeColor = GeminiTheme.BorderStroke,
+                    strokeWidthDp = 1f
+                )
+                background = GeminiTheme.createRippleDrawable(context, chipBg)
+                isClickable = true
+                isFocusable = true
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 0, GeminiTheme.dpToPx(context, 10f), 0)
+                }
+                setOnClickListener {
+                    Toast.makeText(context, "Say: “Hey Voice, $phrase”", Toast.LENGTH_SHORT).show()
+                }
+            }
+            chipsContainer.addView(chip)
+        }
+
+        addSuggestionChip("📞", "Call Amma")
+        addSuggestionChip("🔦", "Turn on flashlight")
+        addSuggestionChip("📝", "Take a note buy milk")
+        addSuggestionChip("🔒", "Lock phone screen")
+        addSuggestionChip("⏰", "Set alarm for 7:00 AM")
+        addSuggestionChip("💬", "Text Rahul saying on my way")
+        addSuggestionChip("📷", "Open Camera")
+        addSuggestionChip("🔔", "Read notifications")
+
+        // 6. Last Result Card
+        lastResultCard = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(
+                GeminiTheme.dpToPx(context, 20f),
+                GeminiTheme.dpToPx(context, 18f),
+                GeminiTheme.dpToPx(context, 20f),
+                GeminiTheme.dpToPx(context, 18f)
+            )
+            background = GeminiTheme.createCardDrawable(
+                context,
+                cornerRadiusDp = 20f,
+                fillColor = GeminiTheme.CardSurface,
+                strokeColor = GeminiTheme.GeminiBlue,
+                strokeWidthDp = 1f
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, GeminiTheme.dpToPx(context, 24f))
             }
             visibility = View.GONE
         }
         root.addView(lastResultCard)
 
-        val resultHeader = TextView(context).apply {
-            text = "LAST ACTION RESULT"
-            textSize = 11f
-            setTextColor(Color.parseColor("#8E8E93"))
-            letterSpacing = 0.1f
+        val resultHeaderRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        lastResultCard.addView(resultHeader)
+        lastResultCard.addView(resultHeaderRow)
+
+        val resultBadge = TextView(context).apply {
+            text = "ACTION EXECUTED"
+            textSize = 10f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(GeminiTheme.GeminiCyan)
+            letterSpacing = 0.12f
+        }
+        resultHeaderRow.addView(resultBadge)
 
         lastResultTextView = TextView(context).apply {
-            textSize = 15f
-            setTextColor(Color.parseColor("#E0E0E0"))
-            setPadding(0, 8, 0, 0)
+            textSize = 14f
+            setTypeface(Typeface.create("sans-serif", Typeface.NORMAL))
+            setTextColor(GeminiTheme.TextPrimary)
+            setPadding(0, GeminiTheme.dpToPx(context, 8f), 0, 0)
+            setLineSpacing(GeminiTheme.dpToPx(context, 3f).toFloat(), 1f)
         }
         lastResultCard.addView(lastResultTextView)
 
-        // Wake Phrase Hint
-        val hintText = TextView(context).apply {
-            text = "Wake phrase: “Hey Voice” or “Okay Voice”\nAll AI models run locally on this phone."
-            textSize = 13f
-            setTextColor(Color.parseColor("#757575"))
+        // 7. Privacy Shield Guarantee Banner
+        val privacyBanner = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, 48, 0, 16)
+            setPadding(
+                GeminiTheme.dpToPx(context, 16f),
+                GeminiTheme.dpToPx(context, 12f),
+                GeminiTheme.dpToPx(context, 16f),
+                GeminiTheme.dpToPx(context, 12f)
+            )
+            background = GeminiTheme.createCardDrawable(
+                context,
+                cornerRadiusDp = 16f,
+                fillColor = Color.parseColor("#10121A"),
+                strokeColor = GeminiTheme.BorderSubtle,
+                strokeWidthDp = 1f
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
-        root.addView(hintText)
+        root.addView(privacyBanner)
+
+        val shieldIcon = ImageView(context).apply {
+            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_nav_security))
+            setColorFilter(GeminiTheme.GeminiMint)
+            layoutParams = LinearLayout.LayoutParams(
+                GeminiTheme.dpToPx(context, 18f),
+                GeminiTheme.dpToPx(context, 18f)
+            ).apply {
+                setMargins(0, 0, GeminiTheme.dpToPx(context, 8f), 0)
+            }
+        }
+        privacyBanner.addView(shieldIcon)
+
+        val privacyText = TextView(context).apply {
+            text = "Wake word “Hey Voice” • Keystore AES-256 • Zero Cloud Telemetry"
+            textSize = 11f
+            setTextColor(GeminiTheme.TextTertiary)
+        }
+        privacyBanner.addView(privacyText)
+    }
+
+    private fun handleOrbToggle() {
+        if (isListeningActive()) {
+            onStopListening()
+        } else {
+            onStartListening()
+        }
+    }
+
+    private fun isListeningActive(): Boolean {
+        return when (currentState) {
+            AssistantState.STOPPED,
+            is AssistantState.ERROR -> false
+            else -> true
+        }
     }
 
     fun updateState(state: AssistantState) {
+        currentState = state
+        orbView.setState(state)
+
         when (state) {
             AssistantState.STOPPED -> {
-                statusTextView.text = "STOPPED"
-                statusTextView.setTextColor(Color.parseColor("#FF5252"))
+                stateBadge.text = "Offline • Tap orb to start"
+                stateBadge.setTextColor(GeminiTheme.TextSecondary)
                 actionButton.text = "Start Offline Listening"
-                (actionButton.background as? GradientDrawable)?.setColor(Color.parseColor("#64B5F6"))
+                actionButton.background = GeminiTheme.createRippleDrawable(
+                    context,
+                    GeminiTheme.createGeminiGradientDrawable(context, cornerRadiusDp = 28f)
+                )
             }
             AssistantState.INITIALIZING -> {
-                statusTextView.text = "INITIALIZING..."
-                statusTextView.setTextColor(Color.parseColor("#FFD54F"))
+                stateBadge.text = "Initializing neural engine..."
+                stateBadge.setTextColor(GeminiTheme.GeminiAmber)
                 actionButton.text = "Stop Listening"
-                (actionButton.background as? GradientDrawable)?.setColor(Color.parseColor("#EF5350"))
+                actionButton.background = GeminiTheme.createRippleDrawable(
+                    context,
+                    GeminiTheme.createCardDrawable(
+                        context,
+                        cornerRadiusDp = 28f,
+                        fillColor = Color.parseColor("#2C1818"),
+                        strokeColor = GeminiTheme.GeminiRed,
+                        strokeWidthDp = 1f
+                    )
+                )
             }
             AssistantState.LISTENING -> {
-                statusTextView.text = "LISTENING"
-                statusTextView.setTextColor(Color.parseColor("#66BB6A"))
+                stateBadge.text = "🟢 Listening • Say “Hey Voice”"
+                stateBadge.setTextColor(GeminiTheme.GeminiMint)
                 actionButton.text = "Stop Listening"
-                (actionButton.background as? GradientDrawable)?.setColor(Color.parseColor("#EF5350"))
+                actionButton.background = GeminiTheme.createRippleDrawable(
+                    context,
+                    GeminiTheme.createCardDrawable(
+                        context,
+                        cornerRadiusDp = 28f,
+                        fillColor = Color.parseColor("#261414"),
+                        strokeColor = GeminiTheme.GeminiRed,
+                        strokeWidthDp = 1f
+                    )
+                )
             }
             AssistantState.WAKE_DETECTED -> {
-                statusTextView.text = "WAKE DETECTED"
-                statusTextView.setTextColor(Color.parseColor("#42A5F5"))
+                stateBadge.text = "⚡ Wake phrase detected!"
+                stateBadge.setTextColor(GeminiTheme.GeminiCyan)
             }
             AssistantState.RECORDING_COMMAND,
             AssistantState.TRANSCRIBING -> {
-                statusTextView.text = "RECORDING SPEECH..."
-                statusTextView.setTextColor(Color.parseColor("#AB47BC"))
+                stateBadge.text = "🎙️ Listening to command..."
+                stateBadge.setTextColor(GeminiTheme.GeminiPurple)
             }
             AssistantState.INFERENCING -> {
-                statusTextView.text = "FUNCTIONGEMMA INFERENCE..."
-                statusTextView.setTextColor(Color.parseColor("#26A69A"))
+                stateBadge.text = "✨ FunctionGemma is thinking..."
+                stateBadge.setTextColor(GeminiTheme.GeminiCoral)
             }
             AssistantState.AUTHORIZING -> {
-                statusTextView.text = "AWAITING BIOMETRICS..."
-                statusTextView.setTextColor(Color.parseColor("#FFA726"))
+                stateBadge.text = "🔒 Biometric verification required"
+                stateBadge.setTextColor(GeminiTheme.GeminiAmber)
             }
             AssistantState.EXECUTING -> {
-                statusTextView.text = "EXECUTING ACTION..."
-                statusTextView.setTextColor(Color.parseColor("#42A5F5"))
+                stateBadge.text = "⚡ Executing mobile action..."
+                stateBadge.setTextColor(GeminiTheme.GeminiCyan)
             }
             AssistantState.CONFIRMING -> {
-                statusTextView.text = "CONFIRMED"
-                statusTextView.setTextColor(Color.parseColor("#66BB6A"))
+                stateBadge.text = "✅ Action completed"
+                stateBadge.setTextColor(GeminiTheme.GeminiMint)
             }
             is AssistantState.ERROR -> {
-                statusTextView.text = "ERROR: ${state.message}"
-                statusTextView.setTextColor(Color.parseColor("#FF5252"))
-                actionButton.text = "Start Offline Listening"
-                (actionButton.background as? GradientDrawable)?.setColor(Color.parseColor("#64B5F6"))
+                stateBadge.text = "⚠️ ${state.message}"
+                stateBadge.setTextColor(GeminiTheme.GeminiRed)
+                actionButton.text = "Retry Listening"
+                actionButton.background = GeminiTheme.createRippleDrawable(
+                    context,
+                    GeminiTheme.createGeminiGradientDrawable(context, cornerRadiusDp = 28f)
+                )
             }
         }
     }

@@ -13,11 +13,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import dev.voice.offline.R
 import dev.voice.offline.VoiceAssistantService
 import dev.voice.offline.feature.about.AboutView
 import dev.voice.offline.feature.commands.CommandsView
@@ -27,6 +29,7 @@ import dev.voice.offline.feature.onboarding.OnboardingView
 import dev.voice.offline.feature.permissions.PermissionsView
 import dev.voice.offline.feature.security.SecurityView
 import dev.voice.offline.feature.settings.SettingsView
+import dev.voice.offline.ui.theme.GeminiTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,7 +52,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var onboardingView: OnboardingView
 
     private var currentTabTag: String = TAB_HOME
-    private val tabButtons = mutableMapOf<String, TextView>()
+    private val tabButtons = mutableMapOf<String, Pair<ImageView, TextView>>()
+    private val tabItemContainers = mutableMapOf<String, LinearLayout>()
 
     companion object {
         const val TAB_HOME = "home"
@@ -69,10 +73,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Root layout (dark mode by default)
+        // Root layout with Gemini deep obsidian background
         val rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#121216"))
+            setBackgroundColor(GeminiTheme.Background)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -80,23 +84,7 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(rootLayout)
 
-        // Top Horizontal Tab Bar
-        val tabScrollView = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            setBackgroundColor(Color.parseColor("#1A1A22"))
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        }
-        tabContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(16, 16, 16, 16)
-        }
-        tabScrollView.addView(tabContainer)
-        rootLayout.addView(tabScrollView)
-
-        // Content Area
+        // Content Area (fills remaining vertical space)
         contentContainer = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -105,6 +93,60 @@ class MainActivity : AppCompatActivity() {
             )
         }
         rootLayout.addView(contentContainer)
+
+        // Floating Bottom Navigation Bar (Gemini Glassmorphic Pill)
+        val bottomNavWrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(GeminiTheme.Background)
+            setPadding(
+                GeminiTheme.dpToPx(this@MainActivity, 12f),
+                0,
+                GeminiTheme.dpToPx(this@MainActivity, 12f),
+                GeminiTheme.dpToPx(this@MainActivity, 12f)
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        rootLayout.addView(bottomNavWrapper)
+
+        val navCard = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = GeminiTheme.createCardDrawable(
+                this@MainActivity,
+                cornerRadiusDp = 28f,
+                fillColor = Color.parseColor("#151722"),
+                strokeColor = GeminiTheme.BorderStroke,
+                strokeWidthDp = 1f
+            )
+            setPadding(
+                GeminiTheme.dpToPx(this@MainActivity, 8f),
+                GeminiTheme.dpToPx(this@MainActivity, 6f),
+                GeminiTheme.dpToPx(this@MainActivity, 8f),
+                GeminiTheme.dpToPx(this@MainActivity, 6f)
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        bottomNavWrapper.addView(navCard)
+
+        val tabScrollView = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        tabContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        tabScrollView.addView(tabContainer)
+        navCard.addView(tabScrollView)
 
         // Initialize All 8 Views
         homeView = HomeView(
@@ -129,14 +171,14 @@ class MainActivity : AppCompatActivity() {
             selectTab(TAB_HOME)
         }
 
-        // Setup Tabs
-        setupTab(TAB_HOME, "Home")
-        setupTab(TAB_COMMANDS, "Commands")
-        setupTab(TAB_PERMISSIONS, "Permissions")
-        setupTab(TAB_SECURITY, "Security")
-        setupTab(TAB_NOTES, "Notes")
-        setupTab(TAB_SETTINGS, "Settings")
-        setupTab(TAB_ABOUT, "About")
+        // Setup Navigation Tabs with Gemini Vector Icons
+        setupTab(TAB_HOME, "Voice", R.drawable.ic_gemini_sparkle)
+        setupTab(TAB_COMMANDS, "Commands", R.drawable.ic_nav_commands)
+        setupTab(TAB_NOTES, "Notes", R.drawable.ic_nav_notes)
+        setupTab(TAB_SECURITY, "Security", R.drawable.ic_nav_security)
+        setupTab(TAB_PERMISSIONS, "Access", R.drawable.ic_nav_permissions)
+        setupTab(TAB_SETTINGS, "Settings", R.drawable.ic_nav_settings)
+        setupTab(TAB_ABOUT, "About", R.drawable.ic_nav_about)
 
         // Check if first run
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -160,21 +202,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupTab(tag: String, label: String) {
-        val tabItem = TextView(this).apply {
-            text = label
-            textSize = 14f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.parseColor("#9E9E9E"))
-            setPadding(28, 14, 28, 14)
+    private fun setupTab(tag: String, label: String, iconResId: Int) {
+        val tabItem = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
-                setColor(Color.TRANSPARENT)
-                cornerRadius = 20f
-            }
+            setPadding(
+                GeminiTheme.dpToPx(this@MainActivity, 14f),
+                GeminiTheme.dpToPx(this@MainActivity, 10f),
+                GeminiTheme.dpToPx(this@MainActivity, 14f),
+                GeminiTheme.dpToPx(this@MainActivity, 10f)
+            )
+            background = GeminiTheme.createPillDrawable(
+                this@MainActivity,
+                fillColor = Color.TRANSPARENT,
+                strokeColor = Color.TRANSPARENT,
+                strokeWidthDp = 0f
+            )
+            isClickable = true
+            isFocusable = true
             setOnClickListener { selectTab(tag) }
         }
-        tabButtons[tag] = tabItem
+
+        val iconView = ImageView(this).apply {
+            setImageDrawable(ContextCompat.getDrawable(this@MainActivity, iconResId))
+            setColorFilter(GeminiTheme.TextSecondary)
+            layoutParams = LinearLayout.LayoutParams(
+                GeminiTheme.dpToPx(this@MainActivity, 18f),
+                GeminiTheme.dpToPx(this@MainActivity, 18f)
+            ).apply {
+                setMargins(0, 0, GeminiTheme.dpToPx(this@MainActivity, 6f), 0)
+            }
+        }
+        tabItem.addView(iconView)
+
+        val labelView = TextView(this).apply {
+            text = label
+            textSize = 12f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+            setTextColor(GeminiTheme.TextSecondary)
+            gravity = Gravity.CENTER
+        }
+        tabItem.addView(labelView)
+
+        tabButtons[tag] = Pair(iconView, labelView)
+        tabItemContainers[tag] = tabItem
         tabContainer.addView(tabItem)
     }
 
@@ -198,20 +269,31 @@ class MainActivity : AppCompatActivity() {
         }
         contentContainer.addView(activeView)
 
-        // Update Tab Button Styles
-        tabButtons.forEach { (tabTag, textView) ->
+        // Update Tab Button Styles with Gemini Active Glow Pill
+        tabButtons.forEach { (tabTag, pair) ->
+            val (iconView, labelView) = pair
+            val container = tabItemContainers[tabTag]
+
             if (tabTag == tag) {
-                textView.setTextColor(Color.parseColor("#FFFFFF"))
-                textView.background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#3F51B5"))
-                    cornerRadius = 20f
-                }
+                iconView.setColorFilter(GeminiTheme.GeminiBlue)
+                labelView.setTextColor(GeminiTheme.TextPrimary)
+                labelView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+                container?.background = GeminiTheme.createPillDrawable(
+                    this,
+                    fillColor = Color.parseColor("#222638"),
+                    strokeColor = GeminiTheme.GeminiBlue,
+                    strokeWidthDp = 1f
+                )
             } else {
-                textView.setTextColor(Color.parseColor("#8E8E93"))
-                textView.background = GradientDrawable().apply {
-                    setColor(Color.TRANSPARENT)
-                    cornerRadius = 20f
-                }
+                iconView.setColorFilter(GeminiTheme.TextSecondary)
+                labelView.setTextColor(GeminiTheme.TextSecondary)
+                labelView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+                container?.background = GeminiTheme.createPillDrawable(
+                    this,
+                    fillColor = Color.TRANSPARENT,
+                    strokeColor = Color.TRANSPARENT,
+                    strokeWidthDp = 0f
+                )
             }
         }
     }

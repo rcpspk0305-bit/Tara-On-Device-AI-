@@ -3,11 +3,15 @@ package dev.voice.offline.feature.settings
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
+import dev.voice.offline.R
+import dev.voice.offline.ui.theme.GeminiTheme
 
 class SettingsView(context: Context) : ScrollView(context) {
 
@@ -17,66 +21,125 @@ class SettingsView(context: Context) : ScrollView(context) {
             ViewGroup.LayoutParams.MATCH_PARENT
         )
         isFillViewport = true
+        overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 64, 48, 48)
+            setPadding(
+                GeminiTheme.dpToPx(context, 20f),
+                GeminiTheme.dpToPx(context, 24f),
+                GeminiTheme.dpToPx(context, 20f),
+                GeminiTheme.dpToPx(context, 32f)
+            )
         }
         addView(root)
 
+        // Header
+        val headerRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, GeminiTheme.dpToPx(context, 6f))
+        }
+        root.addView(headerRow)
+
+        val headerIcon = ImageView(context).apply {
+            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_nav_settings))
+            setColorFilter(GeminiTheme.GeminiBlue)
+            layoutParams = LinearLayout.LayoutParams(
+                GeminiTheme.dpToPx(context, 24f),
+                GeminiTheme.dpToPx(context, 24f)
+            ).apply {
+                setMargins(0, 0, GeminiTheme.dpToPx(context, 8f), 0)
+            }
+        }
+        headerRow.addView(headerIcon)
+
         val header = TextView(context).apply {
             text = "Voice Settings"
-            textSize = 26f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-            setPadding(0, 0, 0, 8)
+            textSize = 24f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(GeminiTheme.TextPrimary)
         }
-        root.addView(header)
+        headerRow.addView(header)
 
         val subheader = TextView(context).apply {
-            text = "Configure acoustic parameters, wake phrase sensitivity, and audio chime feedback."
+            text = "Acoustic parameters, wake sensitivity, silence detection, and audio feedback chime."
             textSize = 13f
-            setTextColor(Color.parseColor("#9E9E9E"))
-            setPadding(0, 0, 0, 36)
+            setTextColor(GeminiTheme.TextSecondary)
+            setPadding(0, 0, 0, GeminiTheme.dpToPx(context, 20f))
+            setLineSpacing(GeminiTheme.dpToPx(context, 3f).toFloat(), 1f)
         }
         root.addView(subheader)
 
         fun addSettingItem(title: String, currentVal: String, description: String) {
             val card = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(32, 24, 32, 24)
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#1E1E24"))
-                    cornerRadius = 20f
-                }
+                setPadding(
+                    GeminiTheme.dpToPx(context, 18f),
+                    GeminiTheme.dpToPx(context, 16f),
+                    GeminiTheme.dpToPx(context, 18f),
+                    GeminiTheme.dpToPx(context, 16f)
+                )
+                background = GeminiTheme.createCardDrawable(
+                    context,
+                    cornerRadiusDp = 18f,
+                    fillColor = GeminiTheme.CardSurface,
+                    strokeColor = GeminiTheme.BorderStroke,
+                    strokeWidthDp = 1f
+                )
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    setMargins(0, 0, 0, 20)
+                    setMargins(0, 0, 0, GeminiTheme.dpToPx(context, 14f))
                 }
             }
+
+            val topRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+            card.addView(topRow)
 
             val titleView = TextView(context).apply {
                 text = title
                 textSize = 15f
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(Color.WHITE)
+                setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+                setTextColor(GeminiTheme.TextPrimary)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             }
-            card.addView(titleView)
+            topRow.addView(titleView)
 
-            val valView = TextView(context).apply {
+            val valPill = TextView(context).apply {
                 text = currentVal
-                textSize = 13f
-                setTextColor(Color.parseColor("#64B5F6"))
-                setPadding(0, 4, 0, 4)
+                textSize = 11f
+                setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+                setTextColor(GeminiTheme.GeminiCyan)
+                setPadding(
+                    GeminiTheme.dpToPx(context, 10f),
+                    GeminiTheme.dpToPx(context, 4f),
+                    GeminiTheme.dpToPx(context, 10f),
+                    GeminiTheme.dpToPx(context, 4f)
+                )
+                background = GeminiTheme.createPillDrawable(
+                    context,
+                    fillColor = Color.parseColor("#122330"),
+                    strokeColor = Color.parseColor("#1B4560"),
+                    strokeWidthDp = 1f
+                )
             }
-            card.addView(valView)
+            topRow.addView(valPill)
 
             val descView = TextView(context).apply {
                 text = description
-                textSize = 12f
-                setTextColor(Color.parseColor("#9E9E9E"))
+                textSize = 13f
+                setTextColor(GeminiTheme.TextSecondary)
+                setPadding(0, GeminiTheme.dpToPx(context, 8f), 0, 0)
+                setLineSpacing(GeminiTheme.dpToPx(context, 2f).toFloat(), 1f)
             }
             card.addView(descView)
 
@@ -84,8 +147,8 @@ class SettingsView(context: Context) : ScrollView(context) {
         }
 
         addSettingItem("Wake Phrase", "“Hey Voice” / “Okay Voice”", "Lightweight offline keyword spotting powered by Vosk acoustic model.")
-        addSettingItem("Recognition Language", "English (Indian English & US English)", "Phonetic model tuned for natural regional pronunciations.")
-        addSettingItem("Listening Sensitivity", "Standard (Cooldown 2.0s)", "Prevents false-positive duplicate triggers.")
+        addSettingItem("Recognition Language", "English (Indian & US)", "Phonetic model tuned for natural regional pronunciations.")
+        addSettingItem("Listening Sensitivity", "Standard (Cooldown 2.0s)", "Prevents false-positive duplicate triggers during conversations.")
         addSettingItem("Silence Timeout", "3.0 Seconds", "Automatically finishes recording command after user stops speaking.")
         addSettingItem("Audio Feedback Chime", "Enabled", "Plays a short confirmation chime when wake word or action completes.")
     }

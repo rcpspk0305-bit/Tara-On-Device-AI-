@@ -3,11 +3,15 @@ package dev.voice.offline.feature.about
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
+import dev.voice.offline.R
+import dev.voice.offline.ui.theme.GeminiTheme
 
 class AboutView(context: Context) : ScrollView(context) {
 
@@ -17,60 +21,94 @@ class AboutView(context: Context) : ScrollView(context) {
             ViewGroup.LayoutParams.MATCH_PARENT
         )
         isFillViewport = true
+        overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 64, 48, 48)
+            setPadding(
+                GeminiTheme.dpToPx(context, 20f),
+                GeminiTheme.dpToPx(context, 24f),
+                GeminiTheme.dpToPx(context, 20f),
+                GeminiTheme.dpToPx(context, 32f)
+            )
         }
         addView(root)
 
-        val header = TextView(context).apply {
-            text = "About & Privacy"
-            textSize = 26f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-            setPadding(0, 0, 0, 8)
+        // Header
+        val headerRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, GeminiTheme.dpToPx(context, 6f))
         }
-        root.addView(header)
+        root.addView(headerRow)
+
+        val headerIcon = ImageView(context).apply {
+            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_nav_about))
+            setColorFilter(GeminiTheme.GeminiBlue)
+            layoutParams = LinearLayout.LayoutParams(
+                GeminiTheme.dpToPx(context, 24f),
+                GeminiTheme.dpToPx(context, 24f)
+            ).apply {
+                setMargins(0, 0, GeminiTheme.dpToPx(context, 8f), 0)
+            }
+        }
+        headerRow.addView(headerIcon)
+
+        val header = TextView(context).apply {
+            text = "About Voice"
+            textSize = 24f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(GeminiTheme.TextPrimary)
+        }
+        headerRow.addView(header)
 
         val subheader = TextView(context).apply {
-            text = "Voice is an air-gapped on-device assistant built for privacy, performance, and complete user agency."
+            text = "Air-gapped on-device intelligence built for privacy, performance, and complete user agency."
             textSize = 13f
-            setTextColor(Color.parseColor("#9E9E9E"))
-            setPadding(0, 0, 0, 36)
+            setTextColor(GeminiTheme.TextSecondary)
+            setPadding(0, 0, 0, GeminiTheme.dpToPx(context, 20f))
+            setLineSpacing(GeminiTheme.dpToPx(context, 3f).toFloat(), 1f)
         }
         root.addView(subheader)
 
-        fun addInfoSection(title: String, content: String) {
+        fun addInfoSection(title: String, content: String, accentColor: Int = GeminiTheme.GeminiBlue) {
             val card = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(32, 24, 32, 24)
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#1E1E24"))
-                    cornerRadius = 20f
-                }
+                setPadding(
+                    GeminiTheme.dpToPx(context, 18f),
+                    GeminiTheme.dpToPx(context, 16f),
+                    GeminiTheme.dpToPx(context, 18f),
+                    GeminiTheme.dpToPx(context, 16f)
+                )
+                background = GeminiTheme.createCardDrawable(
+                    context,
+                    cornerRadiusDp = 18f,
+                    fillColor = GeminiTheme.CardSurface,
+                    strokeColor = GeminiTheme.BorderStroke,
+                    strokeWidthDp = 1f
+                )
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    setMargins(0, 0, 0, 20)
+                    setMargins(0, 0, 0, GeminiTheme.dpToPx(context, 14f))
                 }
             }
 
             val titleView = TextView(context).apply {
                 text = title
                 textSize = 15f
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(Color.parseColor("#64B5F6"))
+                setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+                setTextColor(accentColor)
             }
             card.addView(titleView)
 
             val contentView = TextView(context).apply {
                 text = content
                 textSize = 13f
-                setTextColor(Color.parseColor("#C0C0C0"))
-                setPadding(0, 8, 0, 0)
-                setLineSpacing(4f, 1f)
+                setTextColor(GeminiTheme.TextPrimary)
+                setPadding(0, GeminiTheme.dpToPx(context, 8f), 0, 0)
+                setLineSpacing(GeminiTheme.dpToPx(context, 3f).toFloat(), 1f)
             }
             card.addView(contentView)
 
@@ -79,29 +117,34 @@ class AboutView(context: Context) : ScrollView(context) {
 
         addInfoSection(
             "Air-Gapped Offline Guarantee",
-            "The offline build of Voice contains NO android.permission.INTERNET in its AndroidManifest. It cannot connect to any remote server, cloud API, telemetry service, or analytics platform. Test in Airplane Mode."
+            "The offline build of Voice contains NO android.permission.INTERNET in its AndroidManifest. It physically cannot connect to remote servers, cloud APIs, telemetry services, or analytics platforms. Fully functional in Airplane Mode.",
+            GeminiTheme.GeminiMint
         )
 
         addInfoSection(
             "On-Device AI Models",
-            "• Intent Model: FunctionGemma 270M Mobile Actions (litert-community/functiongemma-270m-ft-mobile-actions)\n" +
-            "• Runtime: Google LiteRT-LM (.litertlm quantized)\n" +
-            "• Speech Recognition: Vosk Offline STT with Indian English phonetic support"
+            "• Intent Model: FunctionGemma 270M Mobile Actions (quantized)\n" +
+            "• Runtime Engine: Google LiteRT-LM (.litertlm)\n" +
+            "• Speech Recognition: Vosk Offline STT with Indian English acoustic phonetics",
+            GeminiTheme.GeminiPurple
         )
 
         addInfoSection(
             "Microphone & Audio Privacy",
-            "Raw PCM microphone audio is streamed strictly to volatile RAM for wake-word and command transcription, and immediately discarded. Voice does not record, log, or persist audio files."
+            "Raw PCM microphone audio is streamed strictly to volatile RAM for wake-word and command transcription, and immediately discarded. Voice does not record, log, or persist audio files to storage.",
+            GeminiTheme.GeminiCyan
         )
 
         addInfoSection(
             "Local Data Encryption",
-            "All notes are stored in local SQLite encrypted with AES-256-GCM under Android Keystore. Sensitive actions require BiometricPrompt with cryptographic signature verification."
+            "All notes are stored in local SQLite encrypted with AES-256-GCM under Android Keystore. Sensitive actions require BiometricPrompt with cryptographic signature verification.",
+            GeminiTheme.GeminiAmber
         )
 
         addInfoSection(
-            "Product Version",
-            "Voice v0.1.0 (Mobile Actions Edition)\nPackage: dev.voice.offline\nCompile SDK: 36 (Android 16 Ready)"
+            "Product Architecture",
+            "Voice v0.1.0 (Mobile Actions Edition)\nPackage: dev.voice.offline\nCompile SDK: 36 (Android 16 Ready)\nTarget: 100% On-Device Neural Execution",
+            GeminiTheme.GeminiBlue
         )
     }
 }
