@@ -22,15 +22,12 @@ class SensitiveActionPolicy {
     }
 
     fun getRiskLevel(action: StructuredAction): ActionRiskLevel {
-        overrides[action.functionName]?.let { return it }
-
-        return when (action) {
+        val defaultLevel = when (action) {
             is StructuredAction.OpenCamera,
             is StructuredAction.TurnFlashlightOn,
             is StructuredAction.TurnFlashlightOff,
             is StructuredAction.TakeNotes,
-            is StructuredAction.OpenApp,
-            is StructuredAction.LockScreen -> ActionRiskLevel.LOW
+            is StructuredAction.OpenApp -> ActionRiskLevel.LOW
 
             is StructuredAction.MakeCall,
             is StructuredAction.SetAlarm,
@@ -38,12 +35,23 @@ class SensitiveActionPolicy {
             is StructuredAction.AnswerCall,
             is StructuredAction.RejectCall -> ActionRiskLevel.MEDIUM
 
+            is StructuredAction.LockScreen,
             is StructuredAction.TextMsg,
             is StructuredAction.ReplyToNotification -> ActionRiskLevel.HIGH
         }
+        // Overrides may strengthen policy, but cannot bypass the built-in security floor.
+        return maxOf(defaultLevel, overrides[action.functionName] ?: defaultLevel)
     }
 
     fun requiresBiometrics(action: StructuredAction): Boolean {
         return getRiskLevel(action) == ActionRiskLevel.HIGH
+    }
+
+    fun requiresUserInteraction(action: StructuredAction): Boolean = requiresBiometrics(action) || when (action) {
+        is StructuredAction.MakeCall,
+        is StructuredAction.OpenApp,
+        is StructuredAction.SetAlarm,
+        StructuredAction.OpenCamera -> true
+        else -> false
     }
 }

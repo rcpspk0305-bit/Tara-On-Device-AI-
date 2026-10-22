@@ -5,12 +5,15 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.TextView
+import android.widget.Button
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import dev.voice.offline.actions.ActionExecutorRegistry
 import dev.voice.offline.actions.ExecutionResult
 import dev.voice.offline.ai.functioncalling.StructuredAction
+import dev.voice.offline.VoiceAssistantService
 
 /**
  * Foreground-only, user-tapped entry point for approving sensitive Voice actions.
@@ -35,6 +38,30 @@ class AuthorizationActivity : AppCompatActivity() {
             this.text = "Voice Action Approval\n\n${describeAction(action)}"
             textSize = 20f
             setPadding(48, 90, 48, 60)
+        }
+        if (!SensitiveActionPolicy().requiresBiometrics(action)) {
+            setShowWhenLocked(false)
+            setTurnScreenOn(false)
+            val layout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(text)
+                addView(Button(this@AuthorizationActivity).apply {
+                    this.text = "Confirm action"
+                    setOnClickListener {
+                        isEnabled = false
+                        executeApproved(token!!, text)
+                    }
+                })
+                addView(Button(this@AuthorizationActivity).apply {
+                    this.text = "Cancel"
+                    setOnClickListener {
+                        PendingCommandStore.default.take(token!!)
+                        finish()
+                    }
+                })
+            }
+            setContentView(layout)
+            return
         }
         setContentView(text)
 
@@ -65,28 +92,12 @@ class AuthorizationActivity : AppCompatActivity() {
                             return
                         }
 
-                        val approved = PendingCommandStore.default.take(token!!) ?: run {
-                            text.text = "Action expired or already consumed"
-                            text.postDelayed({ finish() }, 1500)
-                            return
-                        }
-
-                        val outcome = ActionExecutorRegistry(this@AuthorizationActivity).execute(approved)
-                        text.text = outcome.message
-
-                        if (outcome.isAccepted) {
-                            val chime = try {
-                                ToneGenerator(AudioManager.STREAM_NOTIFICATION, 30)
-                            } catch (_: Exception) { null }
-                            chime?.startTone(ToneGenerator.TONE_PROP_ACK, 90)
-                            text.postDelayed({ chime?.release() }, 170)
-                        }
-
-                        text.postDelayed({ finish() }, 1200)
+                        executeApproved(token!!, text)
                     }
 
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
+                        PendingCommandStore.default.take(token!!)
                         text.text = "Authentication cancelled: $errString"
                         text.postDelayed({ finish() }, 1000)
                     }
@@ -98,6 +109,22 @@ class AuthorizationActivity : AppCompatActivity() {
         } catch (e: Exception) {
             text.text = "Secure biometric hardware authentication unavailable: ${e.message}"
         }
+    }
+
+    private fun executeApproved(token: String, text: TextView) {
+        val approved = PendingCommandStore.default.take(token) ?: run {
+            text.text = "Action expired or already consumed"
+            return
+        }
+        val outcome = ActionExecutorRegistry(this).execute(approved)
+        text.text = outcome.message
+        VoiceAssistantService.reportActionResult(outcome.message)
+        if (outcome.isAccepted) {
+            val chime = runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 30) }.getOrNull()
+            runCatching { chime?.startTone(ToneGenerator.TONE_PROP_ACK, 90) }
+            text.postDelayed({ chime?.release() }, 170)
+        }
+        text.postDelayed({ finish() }, 1200)
     }
 
     private fun describeAction(action: StructuredAction): String = when (action) {

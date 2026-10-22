@@ -7,6 +7,29 @@ import org.junit.Test
 class SecurityPolicyTest {
 
     @Test
+    fun externalActivitiesRequireUserInteractionWithoutRequiringBiometricsForLowRiskActions() {
+        val policy = SensitiveActionPolicy()
+        listOf(StructuredAction.OpenCamera, StructuredAction.OpenApp("com.example"),
+            StructuredAction.MakeCall("Mom"), StructuredAction.SetAlarm(7, 0)).forEach {
+            assertTrue(policy.requiresUserInteraction(it))
+        }
+        assertFalse(policy.requiresBiometrics(StructuredAction.OpenCamera))
+        assertFalse(policy.requiresUserInteraction(StructuredAction.TakeNotes("Milk")))
+        assertFalse(policy.requiresUserInteraction(StructuredAction.TurnFlashlightOn))
+        assertTrue(policy.requiresUserInteraction(StructuredAction.LockScreen))
+    }
+
+    @Test
+    fun screenLockRequiresBiometricsAndCannotBeDowngraded() {
+        val policy = SensitiveActionPolicy()
+        assertTrue(policy.requiresBiometrics(StructuredAction.LockScreen))
+        policy.setOverride("lock_screen", ActionRiskLevel.LOW)
+        policy.setOverride("text_msg", ActionRiskLevel.LOW)
+        assertTrue(policy.requiresBiometrics(StructuredAction.LockScreen))
+        assertTrue(policy.requiresBiometrics(StructuredAction.TextMsg("Mom", "Hello")))
+    }
+
+    @Test
     fun testDefaultActionRiskLevels() {
         val policy = SensitiveActionPolicy()
 
