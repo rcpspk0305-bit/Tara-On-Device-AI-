@@ -36,7 +36,7 @@ class HomeView(
     private val actionButton: TextView
     private val lastResultCard: LinearLayout
     private val lastResultTextView: TextView
-    private var currentState: AssistantState = AssistantState.STOPPED
+    private var currentState: AssistantState = AssistantState.IDLE
 
     init {
         layoutParams = ViewGroup.LayoutParams(
@@ -126,7 +126,7 @@ class HomeView(
         badgeContainer.addView(badgeDot)
 
         val badgeText = TextView(context).apply {
-            text = "100% OFFLINE • FUNCTIONGEMMA 270M"
+            text = "OFFLINE • LOCAL COMMAND PARSER"
             textSize = 10f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
             setTextColor(GeminiTheme.TextSecondary)
@@ -176,7 +176,7 @@ class HomeView(
         // 4. Primary CTA Pill Button
         val buttonDrawable = GeminiTheme.createGeminiGradientDrawable(context, cornerRadiusDp = 28f)
         actionButton = TextView(context).apply {
-            text = "Start Offline Listening"
+            text = "Speak one command"
             textSize = 15f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(Color.WHITE)
@@ -263,7 +263,7 @@ class HomeView(
                     setMargins(0, 0, GeminiTheme.dpToPx(context, 10f), 0)
                 }
                 setOnClickListener {
-                    Toast.makeText(context, "Say: “Hey Voice, $phrase”", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Tap Speak, then say: “$phrase”", Toast.LENGTH_SHORT).show()
                 }
             }
             chipsContainer.addView(chip)
@@ -311,7 +311,7 @@ class HomeView(
         lastResultCard.addView(resultHeaderRow)
 
         val resultBadge = TextView(context).apply {
-            text = "ACTION EXECUTED"
+            text = "LAST RESULT"
             textSize = 10f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(GeminiTheme.GeminiCyan)
@@ -382,7 +382,7 @@ class HomeView(
 
     private fun isListeningActive(): Boolean {
         return when (currentState) {
-            AssistantState.STOPPED,
+            AssistantState.IDLE,
             is AssistantState.ERROR -> false
             else -> true
         }
@@ -391,82 +391,24 @@ class HomeView(
     fun updateState(state: AssistantState) {
         currentState = state
         orbView.setState(state)
-
-        when (state) {
-            AssistantState.STOPPED -> {
-                stateBadge.text = "Offline • Tap orb to start"
-                stateBadge.setTextColor(GeminiTheme.TextSecondary)
-                actionButton.text = "Start Offline Listening"
-                actionButton.background = GeminiTheme.createRippleDrawable(
-                    context,
-                    GeminiTheme.createGeminiGradientDrawable(context, cornerRadiusDp = 28f)
-                )
-            }
-            AssistantState.INITIALIZING -> {
-                stateBadge.text = "Initializing neural engine..."
-                stateBadge.setTextColor(GeminiTheme.GeminiAmber)
-                actionButton.text = "Stop Listening"
-                actionButton.background = GeminiTheme.createRippleDrawable(
-                    context,
-                    GeminiTheme.createCardDrawable(
-                        context,
-                        cornerRadiusDp = 28f,
-                        fillColor = Color.parseColor("#2C1818"),
-                        strokeColor = GeminiTheme.GeminiRed,
-                        strokeWidthDp = 1f
-                    )
-                )
-            }
-            AssistantState.LISTENING -> {
-                stateBadge.text = "🟢 Listening • Say “Hey Voice”"
-                stateBadge.setTextColor(GeminiTheme.GeminiMint)
-                actionButton.text = "Stop Listening"
-                actionButton.background = GeminiTheme.createRippleDrawable(
-                    context,
-                    GeminiTheme.createCardDrawable(
-                        context,
-                        cornerRadiusDp = 28f,
-                        fillColor = Color.parseColor("#261414"),
-                        strokeColor = GeminiTheme.GeminiRed,
-                        strokeWidthDp = 1f
-                    )
-                )
-            }
-            AssistantState.WAKE_DETECTED -> {
-                stateBadge.text = "⚡ Wake phrase detected!"
-                stateBadge.setTextColor(GeminiTheme.GeminiCyan)
-            }
-            AssistantState.RECORDING_COMMAND,
-            AssistantState.TRANSCRIBING -> {
-                stateBadge.text = "🎙️ Listening to command..."
-                stateBadge.setTextColor(GeminiTheme.GeminiPurple)
-            }
-            AssistantState.INFERENCING -> {
-                stateBadge.text = "✨ FunctionGemma is thinking..."
-                stateBadge.setTextColor(GeminiTheme.GeminiCoral)
-            }
-            AssistantState.AUTHORIZING -> {
-                stateBadge.text = "🔒 Biometric verification required"
-                stateBadge.setTextColor(GeminiTheme.GeminiAmber)
-            }
-            AssistantState.EXECUTING -> {
-                stateBadge.text = "⚡ Executing mobile action..."
-                stateBadge.setTextColor(GeminiTheme.GeminiCyan)
-            }
-            AssistantState.CONFIRMING -> {
-                stateBadge.text = "✅ Action completed"
-                stateBadge.setTextColor(GeminiTheme.GeminiMint)
-            }
-            is AssistantState.ERROR -> {
-                stateBadge.text = "⚠️ ${state.message}"
-                stateBadge.setTextColor(GeminiTheme.GeminiRed)
-                actionButton.text = "Retry Listening"
-                actionButton.background = GeminiTheme.createRippleDrawable(
-                    context,
-                    GeminiTheme.createGeminiGradientDrawable(context, cornerRadiusDp = 28f)
-                )
-            }
+        actionButton.text = if (isListeningActive()) "Cancel interaction" else "Speak one command"
+        stateBadge.text = when (state) {
+            AssistantState.IDLE, AssistantState.STOPPED -> "Microphone off. Tap to speak."
+            AssistantState.ACTIVATING, AssistantState.INITIALIZING -> "Preparing offline speech. Microphone off."
+            AssistantState.WAKE_LISTENING -> "Microphone active for Hey Voice"
+            AssistantState.WAKE_DETECTED -> "Wake phrase detected. Microphone active."
+            AssistantState.LISTENING, AssistantState.RECORDING_COMMAND, AssistantState.TRANSCRIBING ->
+                "Microphone active. Say one command."
+            AssistantState.RECOGNIZING -> "Finalizing speech. Microphone off."
+            AssistantState.INFERENCING -> "Understanding command. Microphone off."
+            AssistantState.VALIDATING -> "Checking command. Microphone off."
+            AssistantState.AUTHORIZING -> "Approval pending in notifications. Microphone off."
+            AssistantState.EXECUTING -> "Executing action. Microphone off."
+            AssistantState.CONFIRMING -> "Action result received. Microphone off."
+            AssistantState.CLEANUP -> "Finishing. Microphone off."
+            is AssistantState.ERROR -> state.message
         }
+        stateBadge.setTextColor(if (state is AssistantState.ERROR) GeminiTheme.GeminiRed else GeminiTheme.TextSecondary)
     }
 
     fun updateLastResult(result: String?) {

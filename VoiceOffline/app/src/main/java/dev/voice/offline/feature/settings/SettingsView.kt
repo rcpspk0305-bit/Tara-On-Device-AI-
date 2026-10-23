@@ -13,7 +13,21 @@ import androidx.core.content.ContextCompat
 import dev.voice.offline.R
 import dev.voice.offline.ui.theme.GeminiTheme
 
-class SettingsView(context: Context) : ScrollView(context) {
+class SettingsView(context: Context,
+    private val onEnableHandsFree: () -> Unit = {},
+    private val onChooseAssistant: () -> Unit = {},
+    private val onOpenAssistantSettings: () -> Unit = {}
+) : ScrollView(context) {
+    private var assistantStatus: TextView? = null
+
+    fun refreshAssistantStatus() {
+        val roles = dev.voice.offline.assistant.AssistantRoleManager(context)
+        assistantStatus?.text = when {
+            roles.isSelected -> "Voice is the selected assistant. Gestures depend on this device."
+            roles.isAvailable -> "Voice is not the selected assistant. Tap Choose to request the role."
+            else -> "Assistant role requests are unavailable. Manual activation remains available."
+        }
+    }
 
     init {
         layoutParams = ViewGroup.LayoutParams(
@@ -146,8 +160,30 @@ class SettingsView(context: Context) : ScrollView(context) {
             root.addView(card)
         }
 
-        addSettingItem("Wake Phrase", "“Hey Voice” / “Okay Voice”", "Lightweight offline keyword spotting powered by Vosk acoustic model.")
-        addSettingItem("Recognition Language", "English (Indian & US)", "Phonetic model tuned for natural regional pronunciations.")
+        assistantStatus = TextView(context).apply {
+            setTextColor(GeminiTheme.TextSecondary)
+        }
+        root.addView(assistantStatus)
+        refreshAssistantStatus()
+        root.addView(android.widget.Button(context).apply {
+            text = "Choose Voice as default assistant"
+            setOnClickListener { onChooseAssistant() }
+        })
+        root.addView(android.widget.Button(context).apply {
+            text = "Open Android assistant settings"
+            setOnClickListener { onOpenAssistantSettings() }
+        })
+        root.addView(android.widget.Button(context).apply {
+            text = "Enable hands-free Hey Voice"
+            setOnClickListener { onEnableHandsFree() }
+        })
+        root.addView(TextView(context).apply {
+            text = dev.voice.offline.assistant.AssistantCapabilityChecker(context).hotwordDescription
+            setTextColor(GeminiTheme.TextSecondary)
+        })
+
+        addSettingItem("Wake Phrase", "“Hey Voice” / “Okay Voice”", "Optional Vosk software wake decoder. Microphone stays active; battery cost is unmeasured.")
+        addSettingItem("Recognition Language", "Packaged English model", "Accuracy depends on the packaged Vosk model. Indian English accuracy needs device testing.")
         addSettingItem("Listening Sensitivity", "Standard (Cooldown 2.0s)", "Prevents false-positive duplicate triggers during conversations.")
         addSettingItem("Silence Timeout", "3.0 Seconds", "Automatically finishes recording command after user stops speaking.")
         addSettingItem("Audio Feedback Chime", "Enabled", "Plays a short confirmation chime when wake word or action completes.")

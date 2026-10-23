@@ -30,7 +30,7 @@ class GeminiOrbView(
     private val onOrbClicked: () -> Unit
 ) : View(context) {
 
-    private var currentState: AssistantState = AssistantState.STOPPED
+    private var currentState: AssistantState = AssistantState.IDLE
     private var isPressedDown = false
 
     // Paints
@@ -101,19 +101,19 @@ class GeminiOrbView(
     fun setState(state: AssistantState) {
         currentState = state
         when (state) {
-            AssistantState.STOPPED -> {
+            AssistantState.IDLE, AssistantState.CLEANUP, AssistantState.STOPPED -> {
                 pulseAnimator?.duration = 2400
             }
-            AssistantState.INITIALIZING -> {
+            AssistantState.ACTIVATING, AssistantState.INITIALIZING -> {
                 pulseAnimator?.duration = 1200
             }
-            AssistantState.LISTENING,
+            AssistantState.WAKE_LISTENING, AssistantState.LISTENING,
             AssistantState.WAKE_DETECTED,
             AssistantState.RECORDING_COMMAND,
             AssistantState.TRANSCRIBING -> {
                 pulseAnimator?.duration = 1400
             }
-            AssistantState.INFERENCING -> {
+            AssistantState.RECOGNIZING, AssistantState.VALIDATING, AssistantState.INFERENCING -> {
                 pulseAnimator?.duration = 1000
             }
             AssistantState.AUTHORIZING -> {
@@ -180,7 +180,7 @@ class GeminiOrbView(
 
         // 5. Draw Icon inside core
         val iconSize = (currentRadius * 0.75f).toInt()
-        val icon = if (currentState == AssistantState.STOPPED) sparkleIcon else (micIcon ?: sparkleIcon)
+        val icon = if (currentState == AssistantState.IDLE) sparkleIcon else (micIcon ?: sparkleIcon)
         icon?.let {
             it.setBounds(
                 (centerX - iconSize / 2f).toInt(),
@@ -219,17 +219,17 @@ class GeminiOrbView(
 
     private fun getStateColors(): Triple<Int, Int, Int> {
         return when (currentState) {
-            AssistantState.STOPPED -> Triple(
+            AssistantState.IDLE, AssistantState.CLEANUP, AssistantState.STOPPED -> Triple(
                 Color.parseColor("#2C2F3C"),
                 GeminiTheme.GeminiBlue,
                 GeminiTheme.GeminiPurple
             )
-            AssistantState.INITIALIZING -> Triple(
+            AssistantState.ACTIVATING, AssistantState.INITIALIZING -> Triple(
                 GeminiTheme.GeminiAmber,
                 GeminiTheme.GeminiBlue,
                 GeminiTheme.GeminiCyan
             )
-            AssistantState.LISTENING,
+            AssistantState.WAKE_LISTENING, AssistantState.LISTENING,
             AssistantState.WAKE_DETECTED -> Triple(
                 GeminiTheme.GeminiBlue,
                 GeminiTheme.GeminiPurple,
@@ -241,7 +241,7 @@ class GeminiOrbView(
                 GeminiTheme.GeminiCoral,
                 GeminiTheme.GeminiBlue
             )
-            AssistantState.INFERENCING -> Triple(
+            AssistantState.RECOGNIZING, AssistantState.VALIDATING, AssistantState.INFERENCING -> Triple(
                 GeminiTheme.GeminiCyan,
                 GeminiTheme.GeminiPurple,
                 GeminiTheme.GeminiCoral
@@ -271,12 +271,10 @@ class GeminiOrbView(
 
     private fun isActiveListeningState(): Boolean {
         return when (currentState) {
-            AssistantState.LISTENING,
+            AssistantState.WAKE_LISTENING, AssistantState.LISTENING,
             AssistantState.WAKE_DETECTED,
             AssistantState.RECORDING_COMMAND,
-            AssistantState.TRANSCRIBING,
-            AssistantState.INFERENCING,
-            AssistantState.EXECUTING -> true
+            AssistantState.TRANSCRIBING -> true
             else -> false
         }
     }

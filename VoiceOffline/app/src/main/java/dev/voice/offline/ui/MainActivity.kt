@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import dev.voice.offline.R
 import dev.voice.offline.VoiceAssistantService
@@ -37,6 +38,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+    private val assistantRoleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        settingsView.refreshAssistantStatus()
+        if (!dev.voice.offline.assistant.AssistantRoleManager(this).isSelected) {
+            Toast.makeText(this, "Assistant unchanged. You can select Voice in Android assistant settings.",
+                Toast.LENGTH_LONG).show()
+        }
+    }
 
     private val activityScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
     private lateinit var contentContainer: FrameLayout
@@ -161,7 +169,39 @@ class MainActivity : AppCompatActivity() {
         }
         securityView = SecurityView(this)
         notesView = NotesView(this)
-        settingsView = SettingsView(this)
+        settingsView = SettingsView(this,
+            onEnableHandsFree = {
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Enable software wake listening?")
+                    .setMessage(dev.voice.offline.assistant.AssistantCapabilityChecker(this).hotwordDescription +
+                        " Stop it using Cancel or the microphone notification.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Enable") { _, _ ->
+                        requestedHandsFree = true
+                        handleStartListening()
+                    }.show()
+            },
+            onChooseAssistant = {
+                val roles = dev.voice.offline.assistant.AssistantRoleManager(this)
+                try {
+                    assistantRoleRequest.launch(roles.requestIntent())
+                } catch (_: android.content.ActivityNotFoundException) {
+                    Toast.makeText(this, "Assistant selection is unavailable on this device", Toast.LENGTH_LONG).show()
+                }
+            },
+            onOpenAssistantSettings = {
+                try {
+                    startActivity(dev.voice.offline.assistant.AssistantRoleManager(this).settingsIntent())
+                } catch (_: android.content.ActivityNotFoundException) {
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        Toast.makeText(this, "Open Android Settings and choose the default digital assistant",
+                            Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
         aboutView = AboutView(this)
         onboardingView = OnboardingView(this) {
             getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -298,6 +338,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var requestedHandsFree = false
+
     private fun handleStartListening() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
@@ -307,19 +349,19 @@ class MainActivity : AppCompatActivity() {
             try {
                 startForegroundService(
                     Intent(this, VoiceAssistantService::class.java)
-                        .setAction(VoiceAssistantService.ACTION_START)
+                        .setAction(if (requestedHandsFree) VoiceAssistantService.ACTION_HANDS_FREE else VoiceAssistantService.ACTION_START)
                 )
+                requestedHandsFree = false
             } catch (e: Exception) {
+                requestedHandsFree = false
                 Toast.makeText(this, "Cannot start microphone service: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun handleStopListening() {
-        startService(
-            Intent(this, VoiceAssistantService::class.java)
-                .setAction(VoiceAssistantService.ACTION_STOP)
-        )
+        requestedHandsFree = false
+        stopService(Intent(this, VoiceAssistantService::class.java))
     }
 
     override fun onRequestPermissionsResult(
@@ -332,7 +374,15 @@ class MainActivity : AppCompatActivity() {
             grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
         ) {
             handleStartListening()
+        } else if (requestCode == REQUEST_AUDIO_PERMISSION) {
+            requestedHandsFree = false
+            Toast.makeText(this, "Microphone permission is needed to listen", Toast.LENGTH_LONG).show()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        settingsView.refreshAssistantStatus()
     }
 
     override fun onDestroy() {
