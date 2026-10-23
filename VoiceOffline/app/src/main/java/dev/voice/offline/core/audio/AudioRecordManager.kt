@@ -1,113 +1,100 @@
 package dev.voice.offline.core.audio
 
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
+import android.media.AudioRecordingConfiguration
 import android.media.MediaRecorder
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 
-/**
- * Manages the native Android AudioRecord microphone capture loop in a dedicated coroutine.
- * Guarantees that audio capture and processing never block the UI thread.
- */
+/** Nonblocking reads make cancellation bounded even when a device stops supplying audio. */
 class AudioRecordManager(
+    private val audioManager: AudioManager,
     private val sampleRate: Int = 16000,
-    private val onAudioChunk: (ShortArray, Int) -> Unit,
-    private val onError: (String) -> Unit
+    private val onAudioChunk: (ShortArray, Int) -> Unit
 ) : AutoCloseable {
+    private companion object {
+        val processCapture = AtomicBoolean(false)
+    }
+    private val lock = Any()
+    private var record: AudioRecord? = null
+    private val capturing = AtomicBoolean(false)
+    private val interruption = AtomicReference<String?>(null)
 
-    private val isRecording = AtomicBoolean(false)
-    private var recordJob: Job? = null
-    private var audioRecord: AudioRecord? = null
-    private val recordLock = Any()
-
-    fun start(scope: CoroutineScope) {
-        if (!isRecording.compareAndSet(false, true)) return
-
-        recordJob = scope.launch(Dispatchers.IO) {
-            val minBuf = AudioRecord.getMinBufferSize(
-                sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            if (minBuf <= 0) {
-                onError("16 kHz Mono PCM audio recording is not supported on this device")
-                isRecording.set(false)
-                return@launch
+    suspend fun capture(onStarted: () -> Unit) {
+        check(processCapture.compareAndSet(false, true)) { "Another Voice capture session is active" }
+        check(capturing.compareAndSet(false, true)) { "Microphone capture already active" }
+        val context = currentCoroutineContext()
+        try {
+            synchronized(lock) {
+                context.ensureActive()
+                checkCallInterruption()
+                val minimum = AudioRecord.getMinBufferSize(sampleRate,
+                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                check(minimum > 0) { "16 kHz microphone capture is unsupported" }
+                val active = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, sampleRate,
+                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minimum, 6400))
+                record = active
+                check(active.state == AudioRecord.STATE_INITIALIZED) { "Microphone unavailable" }
+                active.registerAudioRecordingCallback(java.util.concurrent.Executor { it.run() },
+                    object : AudioManager.AudioRecordingCallback() {
+                        override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
+                            if (configs.any { it.isClientSilenced }) {
+                                interruption.set("Microphone capture was silenced by Android or another application")
+                            }
+                        }
+                    })
+                active.startRecording()
+                check(active.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start" }
+                check(active.activeRecordingConfiguration?.isClientSilenced != true) { "Microphone capture is silenced" }
+                android.util.Log.i("VoiceLifecycle", "AudioRecord started")
+                context.ensureActive()
+                onStarted()
             }
-
-            val bufferSize = maxOf(minBuf, 6400)
-            try {
-                val record = AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                    sampleRate,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    bufferSize
-                )
-
-                synchronized(recordLock) { audioRecord = record }
-                if (record.state != AudioRecord.STATE_INITIALIZED) {
-                    onError("Microphone is unavailable or recording permission was denied")
-                    isRecording.set(false)
-                    return@launch
+            val buffer = ShortArray(1600)
+            while (capturing.get()) {
+                context.ensureActive()
+                interruption.get()?.let { error(it) }
+                checkCallInterruption()
+                val count = synchronized(lock) {
+                    record?.read(buffer, 0, buffer.size, AudioRecord.READ_NON_BLOCKING) ?: 0
                 }
-
-                record.startRecording()
-
-                if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-                    onError("Microphone is currently held by another application")
-                    isRecording.set(false)
-                    return@launch
-                }
-
-                val buffer = ShortArray(1600) // 100ms chunks at 16kHz
-                while (isActive && isRecording.get()) {
-                    val read = record.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
-                    if (read > 0) {
-                        onAudioChunk(buffer, read)
-                    } else if (read < 0) {
-                        onError("Microphone read error: code $read")
-                        break
-                    }
-                }
-            } catch (c: CancellationException) {
-                throw c
-            } catch (_: SecurityException) {
-                onError("Microphone permission was denied or revoked")
-            } catch (e: Exception) {
-                onError("Audio capture interrupted: ${e.message}")
-            } finally {
-                stopInternal()
+                check(count >= 0) { "Microphone read failed ($count)" }
+                if (count > 0) onAudioChunk(buffer, count) else delay(10)
             }
+        } catch (denied: SecurityException) {
+            throw IllegalStateException("Microphone permission was denied or revoked", denied)
+        } finally {
+            try { stop() } finally { processCapture.set(false) }
         }
     }
 
     fun stop() {
-        isRecording.set(false)
-        recordJob?.cancel()
-        stopInternal()
-    }
-
-    private fun stopInternal() {
-        val record = synchronized(recordLock) {
-            audioRecord.also { audioRecord = null }
-        }
-        try {
-            try { record?.stop() } catch (_: Exception) {}
-            record?.release()
-        } catch (_: Exception) {
-        } finally {
-            isRecording.set(false)
+        synchronized(lock) {
+            val active = record
+            record = null
+            try {
+                runCatching { if (active?.recordingState == AudioRecord.RECORDSTATE_RECORDING) active.stop() }
+            } finally {
+                try {
+                    active?.release()
+                    if (active != null) android.util.Log.i("VoiceLifecycle", "AudioRecord released")
+                } finally { capturing.set(false) }
+            }
         }
     }
 
-    override fun close() {
-        stop()
+    private fun checkCallInterruption() {
+        check(audioManager.mode != AudioManager.MODE_IN_CALL &&
+            audioManager.mode != AudioManager.MODE_IN_COMMUNICATION &&
+            audioManager.mode != AudioManager.MODE_RINGTONE) {
+            "Microphone interaction interrupted by a call"
+        }
     }
+
+    override fun close() = stop()
 }

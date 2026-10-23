@@ -16,7 +16,6 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import dev.voice.offline.actions.ActionExecutorRegistry
-import dev.voice.offline.actions.ExecutionResult
 import dev.voice.offline.ai.functioncalling.StructuredAction
 import dev.voice.offline.ai.functiongemma.EmulatedLiteRtInferenceAdapter
 import dev.voice.offline.ai.functiongemma.FunctionGemmaEngine
@@ -33,6 +32,18 @@ import dev.voice.offline.security.AuthorizationActivity
 import dev.voice.offline.security.PendingCommandStore
 import dev.voice.offline.security.SensitiveActionPolicy
 import dev.voice.offline.service.AssistantState
+import dev.voice.offline.service.AssistantSessionController
+import dev.voice.offline.service.AssistantSessionResources
+import dev.voice.offline.service.ListeningMode
+import android.os.ResultReceiver
+import android.os.Bundle
+import android.os.SystemClock
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withTimeoutOrNull
 import dev.voice.offline.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -55,13 +66,19 @@ class VoiceAssistantService : Service() {
 
     companion object {
         const val ACTION_START = "dev.voice.offline.START"
+        const val ACTION_HANDS_FREE = "dev.voice.offline.HANDS_FREE"
+        const val EXTRA_INVOCATION_ID = "invocation_id"
+        const val EXTRA_COMPLETION = "completion"
+        @Volatile var activeInvocationId: String? = null
+            private set
         const val ACTION_STOP = "dev.voice.offline.STOP"
 
         private const val CHANNEL_SERVICE = "voice_listening"
         private const val CHANNEL_ACTION = "voice_actions"
         private const val NOTIFICATION_ID_SERVICE = 10
+        private val invocationLock = Any()
 
-        private val _stateFlow = MutableStateFlow<AssistantState>(AssistantState.STOPPED)
+        private val _stateFlow = MutableStateFlow<AssistantState>(AssistantState.IDLE)
         val stateFlow: StateFlow<AssistantState> = _stateFlow.asStateFlow()
 
         private val _lastResultFlow = MutableStateFlow<String?>(null)
@@ -75,9 +92,10 @@ class VoiceAssistantService : Service() {
     private val isRunning = AtomicBoolean(false)
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var assistantJob: Job? = null
-    private val audioChunks = Channel<ShortArray>(4, BufferOverflow.DROP_OLDEST)
+    private var completion: ResultReceiver? = null
+    private var ownedInvocationId: String? = null
 
-    private var audioRecordManager: AudioRecordManager? = null
+    @Volatile private var audioRecordManager: AudioRecordManager? = null
     private var voskModel: Model? = null
     private var wakeWordDetector: WakeWordDetector? = null
     private var speechRecognizer: OfflineSpeechRecognizer? = null
@@ -106,10 +124,29 @@ class VoiceAssistantService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
-            ACTION_START -> {
+            ACTION_START, ACTION_HANDS_FREE -> {
+                @Suppress("DEPRECATION")
+                val receiver = intent.getParcelableExtra<ResultReceiver>(EXTRA_COMPLETION)
+                if (assistantJob?.isCompleted == false || isRunning.get()) {
+                    receiver?.send(1, Bundle().apply { putString("message", "Voice is already handling an interaction") })
+                    return START_NOT_STICKY
+                }
+                synchronized(invocationLock) {
+                    completion = receiver
+                    ownedInvocationId = intent.getStringExtra(EXTRA_INVOCATION_ID)
+                    activeInvocationId = ownedInvocationId
+                }
+                if (activeInvocationId?.let {
+                        !dev.voice.offline.assistant.AssistantInvocationRouter.invocations.mayStart(it)
+                    } == true) {
+                    completeInvocation("Interaction cancelled before activation")
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                     != PackageManager.PERMISSION_GRANTED) {
                     _stateFlow.value = AssistantState.ERROR("Microphone permission denied")
+                    completeInvocation("Microphone permission denied")
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -127,11 +164,12 @@ class VoiceAssistantService : Service() {
                     }
                 } catch (e: Exception) {
                     _stateFlow.value = AssistantState.ERROR("Could not start foreground service: ${e.message}")
+                    completeInvocation("Foreground microphone service unavailable")
                     stopSelf()
                     return START_NOT_STICKY
                 }
 
-                startAssistant()
+                startAssistant(if (intent.action == ACTION_HANDS_FREE) ListeningMode.HANDS_FREE else ListeningMode.ON_DEMAND)
             }
             else -> {
                 stopSelf()
@@ -141,53 +179,28 @@ class VoiceAssistantService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startAssistant() {
-        if (assistantJob?.isCompleted == false) return
+    private fun startAssistant(mode: ListeningMode) {
         if (!isRunning.compareAndSet(false, true)) return
-
-        _stateFlow.value = AssistantState.INITIALIZING
-        assistantJob = serviceScope.launch(Dispatchers.IO) {
-            try {
-                // Initialize offline models
+        _lastResultFlow.value = null
+        val resources = object : AssistantSessionResources {
+            override suspend fun prepare(mode: ListeningMode) {
                 val modelDir = AssetModelInstaller.install(applicationContext)
+                currentCoroutineContext().ensureActive()
                 val model = Model(modelDir.absolutePath)
                 voskModel = model
-
-                wakeWordDetector = VoskWakeWordDetector(model)
-                speechRecognizer = VoskSpeechRecognizer(model)
-
-                // Initialize FunctionGemma 270M adapter
-                val adapter = EmulatedLiteRtInferenceAdapter()
-                functionGemmaEngine = FunctionGemmaEngine(adapter)
                 currentCoroutineContext().ensureActive()
-
-                audioRecordManager = AudioRecordManager(
-                    sampleRate = 16000,
-                    onAudioChunk = { buffer, count ->
-                        if (isRunning.get()) audioChunks.trySend(buffer.copyOf(count))
-                    },
-                    onError = { error ->
-                        if (isRunning.get()) failAssistant(error)
-                    }
-                )
-
-                _stateFlow.value = AssistantState.LISTENING
-                updateServiceNotification("Listening for ‘Hey Voice’...")
-                audioRecordManager?.start(serviceScope)
-                // One coroutine owns the recognizers, inference, and cleanup. Audio captured
-                // during inference is bounded, and native handles cannot close during decoding.
-                for (chunk in audioChunks) {
-                    currentCoroutineContext().ensureActive()
-                    if (!isRunning.get()) break
-                    handleAudioChunk(chunk, chunk.size)
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (e: Exception) {
-                failAssistant("Assistant failed: ${e.message}")
-            } finally {
-                isRunning.set(false)
-                audioRecordManager?.stop()
+                if (mode == ListeningMode.HANDS_FREE) wakeWordDetector = VoskWakeWordDetector(model)
+                speechRecognizer = VoskSpeechRecognizer(model)
+                // Existing deterministic compatibility backend; no claim of real model inference.
+                functionGemmaEngine = FunctionGemmaEngine(EmulatedLiteRtInferenceAdapter())
+            }
+            override suspend fun captureCommand(mode: ListeningMode, transition: (AssistantState) -> Unit): String =
+                captureOneCommand(mode, transition)
+            override fun stopCapture() { audioRecordManager?.stop() }
+            override suspend fun processTranscript(text: String, transition: (AssistantState) -> Unit) {
+                processTranscriptAction(text, transition)
+            }
+            override fun close() {
                 runCatching { wakeWordDetector?.close() }
                 runCatching { speechRecognizer?.close() }
                 runCatching { functionGemmaEngine?.close() }
@@ -197,106 +210,133 @@ class VoiceAssistantService : Service() {
                 speechRecognizer = null
                 functionGemmaEngine = null
                 voskModel = null
-                if (_stateFlow.value !is AssistantState.ERROR) _stateFlow.value = AssistantState.STOPPED
+            }
+        }
+        val controller = AssistantSessionController(resources) { state ->
+            _stateFlow.value = state
+            android.util.Log.i("VoiceLifecycle", "mode=$mode state=$state")
+            if (state != AssistantState.IDLE && state != AssistantState.CLEANUP) {
+                updateServiceNotification(when (state) {
+                    AssistantState.WAKE_LISTENING -> "Hands-free: microphone active for Hey Voice"
+                    AssistantState.LISTENING -> "Microphone active: say one command"
+                    else -> "Processing your command"
+                })
+            }
+        }
+        assistantJob = serviceScope.launch(Dispatchers.IO) {
+            try {
+                controller.run(mode)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _lastResultFlow.value = "Assistant stopped: ${error.message}"
+                notifyAlert(_lastResultFlow.value.orEmpty())
+            } finally {
+                isRunning.set(false)
+                _stateFlow.value = AssistantState.IDLE
+                completeInvocation(_lastResultFlow.value ?: "Interaction ended")
+                stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
         }
     }
 
-    private suspend fun handleAudioChunk(buffer: ShortArray, count: Int) {
-        when (_stateFlow.value) {
-            is AssistantState.LISTENING -> {
-                val detector = wakeWordDetector ?: return
-                val result = detector.detect(buffer, count)
-                if (result is WakeWordResult.Detected) {
-                    _stateFlow.value = AssistantState.WAKE_DETECTED
-                    playAckChime()
-                    _stateFlow.value = AssistantState.RECORDING_COMMAND
-                    speechRecognizer?.startListening()
-                    updateServiceNotification("Listening to your command...")
+    private suspend fun captureOneCommand(mode: ListeningMode, transition: (AssistantState) -> Unit): String =
+        coroutineScope {
+            val chunks = Channel<ShortArray>(4, BufferOverflow.DROP_OLDEST)
+            val ready = CompletableDeferred<Unit>()
+            val recognizer = checkNotNull(speechRecognizer)
+            var waitingForWake = mode == ListeningMode.HANDS_FREE
+            recognizer.reset()
+            wakeWordDetector?.reset()
+            val manager = AudioRecordManager(getSystemService(AudioManager::class.java), onAudioChunk = { buffer, count ->
+                chunks.trySend(buffer.copyOf(count))
+            })
+            audioRecordManager = manager
+            val capture = launch(Dispatchers.IO) {
+                manager.capture {
+                    if (!waitingForWake) recognizer.startListening()
+                    transition(if (waitingForWake) AssistantState.WAKE_LISTENING else AssistantState.LISTENING)
+                    ready.complete(Unit)
                 }
             }
-
-            is AssistantState.RECORDING_COMMAND,
-            is AssistantState.TRANSCRIBING -> {
-                val recognizer = speechRecognizer ?: return
-                val result = recognizer.offer(buffer, count)
-
-                when (result) {
-                    is SpeechRecognitionResult.Partial -> {
-                        _stateFlow.value = AssistantState.TRANSCRIBING
-                    }
-                    is SpeechRecognitionResult.Final -> {
-                        processTranscript(result.text)
-                    }
-                    SpeechRecognitionResult.SilenceTimeout,
-                    SpeechRecognitionResult.MaxDurationExceeded -> {
-                        val text = recognizer.finish()
-                        if (text.isNotBlank()) {
-                            processTranscript(text)
-                        } else {
-                            returnToListening("No speech detected")
+            try {
+                ready.await()
+                var commandStarted = SystemClock.elapsedRealtime()
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val chunk = withTimeoutOrNull(1500L) { chunks.receive() }
+                        ?: error("Microphone stopped supplying audio")
+                    if (waitingForWake) {
+                        if (wakeWordDetector?.detect(chunk, chunk.size) is WakeWordResult.Detected) {
+                            transition(AssistantState.WAKE_DETECTED)
+                            playAckChime()
+                            recognizer.startListening()
+                            commandStarted = SystemClock.elapsedRealtime()
+                            waitingForWake = false
+                            transition(AssistantState.LISTENING)
                         }
+                        continue
                     }
-                    SpeechRecognitionResult.Listening -> Unit
+                    if (SystemClock.elapsedRealtime() - commandStarted >= 7000L) {
+                        return@coroutineScope recognizer.finish()
+                    }
+                    when (val result = recognizer.offer(chunk, chunk.size)) {
+                        is SpeechRecognitionResult.Final -> return@coroutineScope result.text
+                        SpeechRecognitionResult.SilenceTimeout, SpeechRecognitionResult.MaxDurationExceeded ->
+                            return@coroutineScope recognizer.finish()
+                        else -> Unit
+                    }
                 }
+                @Suppress("UNREACHABLE_CODE")
+                ""
+            } finally {
+                manager.stop()
+                withContext(NonCancellable) { capture.cancelAndJoin() }
+                chunks.close()
+                audioRecordManager = null
             }
+        }.also { if (it.isBlank()) _lastResultFlow.value = "No speech detected" }
 
-            else -> Unit
-        }
-    }
-
-    private suspend fun processTranscript(transcript: String) {
-        _stateFlow.value = AssistantState.INFERENCING
-        updateServiceNotification("Understanding: \"$transcript\"...")
-
-        val engine = functionGemmaEngine
-        if (engine == null) {
-            returnToListening("Engine unavailable")
-            return
-        }
-
-        when (val inferResult = engine.inferAction(transcript)) {
+    private suspend fun processTranscriptAction(transcript: String, transition: (AssistantState) -> Unit) {
+        when (val result = checkNotNull(functionGemmaEngine).inferAction(transcript)) {
             is FunctionGemmaResult.Success -> {
-                dispatchAction(inferResult.action)
+                // The engine has already parsed and schema-validated this exact action.
+                transition(AssistantState.VALIDATING)
+                currentCoroutineContext().ensureActive()
+                dispatchAction(result.action, transition)
             }
-            is FunctionGemmaResult.Rejected -> {
-                returnToListening("Command not recognized: ${inferResult.reason}")
-            }
-            is FunctionGemmaResult.Error -> {
-                returnToListening("Error during inference: ${inferResult.error.message}")
-            }
+            is FunctionGemmaResult.Rejected -> _lastResultFlow.value = "Command not recognized: ${result.reason}"
+            is FunctionGemmaResult.Error -> _lastResultFlow.value = "Command processing failed: ${result.error.message}"
         }
     }
 
-    private fun dispatchAction(action: StructuredAction) {
+    private fun dispatchAction(action: StructuredAction, transition: (AssistantState) -> Unit) {
         if (!isRunning.get()) return
-
         if (securityPolicy.requiresUserInteraction(action)) {
-            _stateFlow.value = AssistantState.AUTHORIZING
-            returnToListening(if (requestUserAuthorization(action)) "Action pending approval" else "Enable action approval notifications")
+            transition(AssistantState.AUTHORIZING)
+            _lastResultFlow.value = if (requestUserAuthorization(action)) "Action pending approval"
+                else "Enable action approval notifications"
         } else {
-            _stateFlow.value = AssistantState.EXECUTING
+            transition(AssistantState.EXECUTING)
             val outcome = actionRegistry.execute(action)
             _lastResultFlow.value = outcome.message
-
             if (outcome.isAccepted) {
-                _stateFlow.value = AssistantState.CONFIRMING
+                transition(AssistantState.CONFIRMING)
                 playAckChime()
-            } else {
-                notifyAlert(outcome.message)
-            }
-            returnToListening(outcome.message)
+            } else notifyAlert(outcome.message)
         }
     }
 
-    private fun returnToListening(statusMessage: String) {
-        if (!isRunning.get()) return
-        while (audioChunks.tryReceive().isSuccess) { /* Discard audio captured during the action. */ }
-        speechRecognizer?.reset()
-        wakeWordDetector?.reset()
-        _stateFlow.value = AssistantState.LISTENING
-        updateServiceNotification("Listening for ‘Hey Voice’ ($statusMessage)")
+    private fun completeInvocation(message: String) {
+        val receiver = synchronized(invocationLock) {
+            val receiver = completion
+            completion = null
+            if (activeInvocationId == ownedInvocationId) activeInvocationId = null
+            ownedInvocationId = null
+            receiver
+        }
+        receiver?.send(0, Bundle().apply { putString("message", message) })
     }
 
     private fun requestUserAuthorization(action: StructuredAction): Boolean {
@@ -406,22 +446,14 @@ class VoiceAssistantService : Service() {
     private fun stopAssistant() {
         isRunning.set(false)
         assistantJob?.cancel()
-        _stateFlow.value = AssistantState.STOPPED
-    }
-
-    private fun failAssistant(message: String) {
-        _lastResultFlow.value = message
-        _stateFlow.value = AssistantState.ERROR(message)
-        isRunning.set(false)
-        notifyAlert(message)
-        assistantJob?.cancel()
-        stopSelf()
+        audioRecordManager?.stop()
     }
 
     override fun onDestroy() {
-        isRunning.set(false)
-        assistantJob?.cancel()
+        stopAssistant()
         serviceScope.cancel()
+        completeInvocation(_lastResultFlow.value ?: "Interaction cancelled")
+        stopForeground(STOP_FOREGROUND_REMOVE)
         toneGenerator?.release()
         super.onDestroy()
     }

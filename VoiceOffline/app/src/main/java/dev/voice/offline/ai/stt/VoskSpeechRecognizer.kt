@@ -10,20 +10,21 @@ class VoskSpeechRecognizer(
 ) : OfflineSpeechRecognizer {
 
     private val recognizer = Recognizer(model, 16000f)
-    private var maxDurationDeadline = 0L
-    private var silenceDeadline = 0L
-    private var hasSpoken = false
+    private var deadline: CommandDeadline? = null
 
     override fun startListening(maxDurationMs: Long, silenceTimeoutMs: Long) {
         recognizer.reset()
         val now = currentTime()
-        maxDurationDeadline = now + maxDurationMs
-        silenceDeadline = now + silenceTimeoutMs
-        hasSpoken = false
+        deadline = CommandDeadline(maxDurationMs, silenceTimeoutMs, now)
     }
 
     override fun offer(buffer: ShortArray, count: Int): SpeechRecognitionResult {
         val now = currentTime()
+        if (deadline?.hasExpired(now) != false) {
+            val text = finish()
+            return if (text.isNotBlank()) SpeechRecognitionResult.Final(text)
+            else SpeechRecognitionResult.SilenceTimeout
+        }
 
         if (recognizer.acceptWaveForm(buffer, count)) {
             val text = parseResultText(recognizer.result)
@@ -33,22 +34,9 @@ class VoskSpeechRecognizer(
         } else {
             val partial = parsePartialText(recognizer.partialResult)
             if (partial.isNotBlank()) {
-                hasSpoken = true
-                silenceDeadline = now + 2500L // Reset silence timer on active speech
+                deadline?.onPartial(partial, now)
                 return SpeechRecognitionResult.Partial(partial)
             }
-        }
-
-        if (now >= maxDurationDeadline) {
-            val text = finish()
-            return if (text.isNotBlank()) SpeechRecognitionResult.Final(text)
-            else SpeechRecognitionResult.MaxDurationExceeded
-        }
-
-        if (hasSpoken && now >= silenceDeadline) {
-            val text = finish()
-            return if (text.isNotBlank()) SpeechRecognitionResult.Final(text)
-            else SpeechRecognitionResult.SilenceTimeout
         }
 
         return SpeechRecognitionResult.Listening
@@ -62,9 +50,7 @@ class VoskSpeechRecognizer(
 
     override fun reset() {
         recognizer.reset()
-        maxDurationDeadline = 0L
-        silenceDeadline = 0L
-        hasSpoken = false
+        deadline = null
     }
 
     override fun close() {

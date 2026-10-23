@@ -10,9 +10,28 @@ class OfflineSpeechEngine(modelPath: String, private val onCommand: (String) -> 
     private val wake = Recognizer(model, 16000f, "[\"hey voice\",\"okay voice\",\"[unk]\"]")
     private val command = Recognizer(model, 16000f)
     private var listeningForCommand = false
+    private var active = false
+    private var handsFree = false
     private var commandDeadlineNanos = 0L
 
+    override fun startListening(handsFree: Boolean) {
+        this.handsFree = handsFree
+        active = true
+        listeningForCommand = !handsFree
+        commandDeadlineNanos = System.nanoTime() + 7_000_000_000L
+        command.reset()
+        wake.reset()
+    }
+
+    override fun stopListening() {
+        active = false
+        listeningForCommand = false
+        command.reset()
+        wake.reset()
+    }
+
     override fun offer(buffer: ShortArray, count: Int) {
+        if (!active) return
         if (listeningForCommand) {
             if (command.acceptWaveForm(buffer, count)) {
                 val recognized = JSONObject(command.result).optString("text")
@@ -39,6 +58,7 @@ class OfflineSpeechEngine(modelPath: String, private val onCommand: (String) -> 
 
     private fun finish(text: String) {
         listeningForCommand = false
+        active = handsFree
         wake.reset()
         command.reset()
         if (text.isNotBlank()) onCommand(text)
