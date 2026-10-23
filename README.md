@@ -13,6 +13,11 @@ are not integrated. Downloading a model does not enable inference in this checko
 exercise the fallback and application logic; they do not establish model accuracy, device
 compatibility, hardware-backed security, or release readiness.
 
+**Microphone and assistant lifecycle:** Manual activation captures one command, releases AudioRecord
+before processing, and stops the foreground worker afterward. Settings offers a separate disclosed
+software hands-free mode and the Android default-assistant role request. See
+[implementation, verification, and device limitations](docs/ASSISTANT_LIFECYCLE.md).
+
 **Voice** is an on-device, actions-first mobile agent for Android. Unlike conversational chatbots that require cloud infrastructure, Voice processes speech, understands intent, validates tool schemas, and executes native Android commands **100% locally on your phone**.
 
 - **Zero Cloud Latency & Zero Telemetry**: The `offline` flavor does not include `android.permission.INTERNET`. Your voice never leaves your device.

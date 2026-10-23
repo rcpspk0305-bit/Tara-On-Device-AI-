@@ -7,8 +7,8 @@ no server or chat interface. Microphone samples and transcripts are processed in
 AES-256-GCM encrypted under a nonexportable Android Keystore key, with app backups disabled.
 
 **Status: reference implementation, not a certified production release.** The base project source is
-complete but a speech model must be packaged before it can listen. It has not been compiled or run
-on a physical Android device in this delivery environment. Do not publish before completing the
+complete but a speech model must be packaged before it can listen. Local compile/unit/lint and emulator results are recorded in
+[the lifecycle report](../docs/ASSISTANT_LIFECYCLE.md). It has not been verified on a physical device. Do not publish before completing the
 real-device security/performance and Play-policy verification checklist below.
 
 ## Setup
@@ -26,13 +26,20 @@ real-device security/performance and Play-policy verification checklist below.
 6. Install the app. Grant microphone permission, notification permission, and optional permissions only
    for the actions you want. Enable notification listener in Android settings for message replies,
    and enable the device administrator role for `lock screen`.
-7. Open app, tap **Start offline listening** while activity is visible. Say “hey voice”, wait for
-   the endpoint, then a supported command. Check status/approval notifications.
-8. To test that runtime is offline, disable Wi-Fi and mobile data. The app contains no INTERNET permission.
+7. Open the app and tap **Speak one command** while the activity is visible. Say the command directly;
+   no wake phrase is needed. After endpoint silence or the 7-second command limit, capture is released
+   before processing. The worker foreground service stops afterward. Check result/approval notifications.
+8. In **Settings**, choose **Voice as default assistant** through Android's system role request. A supported
+   system gesture opens a compact Voice session and routes one command to the same offline worker.
+   Role availability and gesture configuration depend on the device. Microphone permission is still required.
+9. Optionally choose **Enable hands-free Hey Voice** and accept the disclosure. Vosk software wake
+   monitoring keeps the microphone active; it is not a verified low-power or hardware/DSP engine.
+   Stop it from the app or microphone notification. The option does not restart on boot or process death.
+10. To test that runtime is offline, disable Wi-Fi and mobile data. The app contains no INTERNET permission.
 
 ### Voice commands
 
-- `hey voice` → `open camera`
+- Tap **Speak one command** → `open camera`
 - `hey voice` → `lock screen`
 - `hey voice` → `take a note buy milk`
 - `hey voice` → `call Alice` (requires exact, unique name with one phone number, user approval)
@@ -46,8 +53,9 @@ Always-on listening may be interrupted by other applications or the OEM's batter
 
 ### Security and policy notes
 
-- Android 14+ prevents microphone FGS startup from many background states. This implementation starts
-  from an actual visible Activity, never `BOOT_COMPLETED`, and uses `START_NOT_STICKY`.
+- Android 14+ restricts microphone foreground service startup. Manual capture starts from a visible
+  Activity; system invocation starts from the selected VoiceInteractionService/session. Unsupported
+  starts fail with feedback. There is no BOOT_COMPLETED restart; the worker is START_NOT_STICKY.
 - Notifications must be allowed for approval prompts. Android does not permit arbitrary background
   biometric activity launches or screen wake; a **user taps a notification** to open AuthorizationActivity.
 - The biometrics signing key requires `BIOMETRIC_STRONG`, is bound to Android Keystore, and is hardware-backed
