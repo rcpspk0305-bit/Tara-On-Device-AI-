@@ -1,0 +1,75 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Orbital Ring 1: Tilted Top-Left to Bottom-Right (Cyan stroke) -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M12,13 C22,6 38,14 41,26 C44,38 34,44 24,41 C14,38 7,28 9,18 C10,13 11,12 12,13 Z" />
+
+    <!-- Orbital Ring 2: Tilted Top-Right to Bottom-Left (Orange stroke) -->
+    <path
+        android:strokeColor="#FF7A00"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M36,13 C42,19 41,33 31,40 C21,47 11,41 7,29 C3,17 13,9 24,8 C30,8 34,11 36,13 Z" />
+
+    <!-- Audio Waveform Cluster 1: Top-Left (Cyan) -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M9,17.5h1.5v3h-1.5z M12,15h1.5v8h-1.5z M15,16.5h1.5v5h-1.5z M18,18h1.5v2h-1.5z" />
+
+    <!-- Audio Waveform Cluster 2: Top-Right (Cyan / Frost) -->
+    <path
+        android:fillColor="#7EE7F8"
+        android:pathData="M28.5,18h1.5v2h-1.5z M31.5,16.5h1.5v5h-1.5z M34.5,15h1.5v8h-1.5z M37.5,17.5h1.5v3h-1.5z" />
+
+    <!-- Audio Waveform Cluster 3: Bottom-Left (Cyan) -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M9,27.5h1.5v3h-1.5z M12,25h1.5v8h-1.5z M15,26.5h1.5v5h-1.5z M18,28h1.5v2h-1.5z" />
+
+    <!-- Audio Waveform Cluster 4: Bottom-Right (Neon Orange) -->
+    <path
+        android:fillColor="#FF7A00"
+        android:pathData="M28.5,28h1.5v2h-1.5z M31.5,26.5h1.5v5h-1.5z M34.5,25h1.5v8h-1.5z M37.5,27.5h1.5v3h-1.5z" />
+
+    <!-- Outer Radiant Star: Left / Top half (Cyan) -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M24,4 C23,17 17,23 4,24 C17,25 23,31 24,44" />
+
+    <!-- Outer Radiant Star: Right / Bottom half (Orange) -->
+    <path
+        android:strokeColor="#FF6B00"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M24,4 C25,17 31,23 44,24 C31,25 25,31 24,44" />
+
+    <!-- Inner 4-Pointed Star Outline (White Glow) -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M24,14 C24.5,19.5 28.5,23.5 34,24 C28.5,24.5 24.5,28.5 24,34 C23.5,28.5 19.5,24.5 14,24 C19.5,23.5 23.5,19.5 24,14 Z" />
+
+    <!-- Central Radiant Core (Solid White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,19 C24.5,21.8 26.2,23.5 29,24 C26.2,24.5 24.5,26.2 24,29 C23.5,26.2 21.8,24.5 19,24 C21.8,23.5 23.5,21.8 24,19 Z" />
+
+</vector>

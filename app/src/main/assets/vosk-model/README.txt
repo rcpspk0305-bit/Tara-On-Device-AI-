@@ -1,0 +1,3 @@
+Place the FULL CONTENTS of a licensed, compatible Vosk 16kHz English model here before building:
+app/src/main/assets/vosk-model/am, conf, graph, ivector (if present), ...
+The model weights are intentionally not included in this source archive.
