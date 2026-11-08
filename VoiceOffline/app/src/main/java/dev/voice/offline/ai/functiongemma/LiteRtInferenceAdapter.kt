@@ -36,8 +36,9 @@ class EmulatedLiteRtInferenceAdapter : LiteRtInferenceAdapter {
 
     override suspend fun generate(prompt: String): Flow<String> = flow {
         // Extract the user turn from the prompt
-        val userTurn = Regex("""<start_of_turn>user\s*\n(.*?)\n<end_of_turn>""", RegexOption.DOT_MATCHES_ALL)
+        val rawTurn = Regex("""<start_of_turn>user\s*\n(.*?)\n<end_of_turn>""", RegexOption.DOT_MATCHES_ALL)
             .find(prompt)?.groupValues?.get(1)?.trim()?.lowercase() ?: ""
+        val userTurn = rawTurn.replace(Regex("^(?:hey|okay|hi|hello)?\\s*\\b(?:tara|voice)\\b[,\\s:]*"), "").trim()
 
         // Check for prompt injection, jailbreaks, or destructive non-supported commands
         val isInjectionOrAttack = userTurn.contains("ignore previous") ||

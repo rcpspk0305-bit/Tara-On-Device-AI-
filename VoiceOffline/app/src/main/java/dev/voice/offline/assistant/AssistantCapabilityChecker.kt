@@ -14,6 +14,6 @@ class AssistantCapabilityChecker(private val context: Context) {
 
     // An assistant role or a device feature flag does not establish DSP/enrollment access.
     val hotwordDescription: String get() =
-        "Hardware hotword detection is not enabled. Optional Hey Voice uses Vosk software " +
+        "Hardware hotword detection is not enabled. Optional Hey Tara uses Vosk software " +
             "monitoring with an active microphone and Android privacy indicator. Power use is unmeasured."
 }

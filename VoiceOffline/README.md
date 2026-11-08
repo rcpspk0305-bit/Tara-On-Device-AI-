@@ -29,10 +29,10 @@ real-device security/performance and Play-policy verification checklist below.
 7. Open the app and tap **Speak one command** while the activity is visible. Say the command directly;
    no wake phrase is needed. After endpoint silence or the 7-second command limit, capture is released
    before processing. The worker foreground service stops afterward. Check result/approval notifications.
-8. In **Settings**, choose **Voice as default assistant** through Android's system role request. A supported
-   system gesture opens a compact Voice session and routes one command to the same offline worker.
+8. In **Settings**, choose **Tara as default assistant** through Android's system role request. A supported
+   system gesture opens a compact Tara session and routes one command to the same offline worker.
    Role availability and gesture configuration depend on the device. Microphone permission is still required.
-9. Optionally choose **Enable hands-free Hey Voice** and accept the disclosure. Vosk software wake
+9. Optionally choose **Enable hands-free Hey Tara** and accept the disclosure. Vosk software wake
    monitoring keeps the microphone active; it is not a verified low-power or hardware/DSP engine.
    Stop it from the app or microphone notification. The option does not restart on boot or process death.
 10. To test that runtime is offline, disable Wi-Fi and mobile data. The app contains no INTERNET permission.
@@ -40,11 +40,11 @@ real-device security/performance and Play-policy verification checklist below.
 ### Voice commands
 
 - Tap **Speak one command** → `open camera`
-- `hey voice` → `lock screen`
-- `hey voice` → `take a note buy milk`
-- `hey voice` → `call Alice` (requires exact, unique name with one phone number, user approval)
-- `hey voice` → `answer call` (requires permission; legacy best-effort API)
-- `hey voice` → `reply to Alice saying I am on my way` (requires active notification with direct-reply action and biometric approval)
+- `hey tara` → `lock screen`
+- `hey tara` → `take a note buy milk`
+- `hey tara` → `call Alice` (requires exact, unique name with one phone number, user approval)
+- `hey tara` → `answer call` (requires permission; legacy best-effort API)
+- `hey tara` → `reply to Alice saying I am on my way` (requires active notification with direct-reply action and biometric approval)
 
 **Important:** Vosk wake detection requires a clean wake phrase and endpoint silence. This is a
 restricted-vocabulary decoder, not a dedicated ultra-low-power wake word model, and may consume

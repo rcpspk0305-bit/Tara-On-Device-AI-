@@ -30,7 +30,7 @@ import dev.voice.offline.feature.onboarding.OnboardingView
 import dev.voice.offline.feature.permissions.PermissionsView
 import dev.voice.offline.feature.security.SecurityView
 import dev.voice.offline.feature.settings.SettingsView
-import dev.voice.offline.ui.theme.GeminiTheme
+import dev.voice.offline.ui.theme.TaraTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     private val assistantRoleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         settingsView.refreshAssistantStatus()
         if (!dev.voice.offline.assistant.AssistantRoleManager(this).isSelected) {
-            Toast.makeText(this, "Assistant unchanged. You can select Voice in Android assistant settings.",
+            Toast.makeText(this, "Assistant unchanged. You can select Tara in Android assistant settings.",
                 Toast.LENGTH_LONG).show()
         }
     }
@@ -81,10 +81,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Root layout with Gemini deep obsidian background
+        // Root layout with TARA deep obsidian background
         val rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(GeminiTheme.Background)
+            setBackgroundColor(TaraTheme.Background)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -102,15 +102,15 @@ class MainActivity : AppCompatActivity() {
         }
         rootLayout.addView(contentContainer)
 
-        // Floating Bottom Navigation Bar (Gemini Glassmorphic Pill)
+        // Floating Bottom Navigation Bar (TARA Glassmorphic Pill)
         val bottomNavWrapper = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(GeminiTheme.Background)
+            setBackgroundColor(TaraTheme.Background)
             setPadding(
-                GeminiTheme.dpToPx(this@MainActivity, 12f),
+                TaraTheme.dpToPx(this@MainActivity, 12f),
                 0,
-                GeminiTheme.dpToPx(this@MainActivity, 12f),
-                GeminiTheme.dpToPx(this@MainActivity, 12f)
+                TaraTheme.dpToPx(this@MainActivity, 12f),
+                TaraTheme.dpToPx(this@MainActivity, 12f)
             )
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -121,18 +121,18 @@ class MainActivity : AppCompatActivity() {
 
         val navCard = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = GeminiTheme.createCardDrawable(
+            background = TaraTheme.createCardDrawable(
                 this@MainActivity,
                 cornerRadiusDp = 28f,
-                fillColor = Color.parseColor("#151722"),
-                strokeColor = GeminiTheme.BorderStroke,
+                fillColor = Color.parseColor("#121622"),
+                strokeColor = TaraTheme.BorderStroke,
                 strokeWidthDp = 1f
             )
             setPadding(
-                GeminiTheme.dpToPx(this@MainActivity, 8f),
-                GeminiTheme.dpToPx(this@MainActivity, 6f),
-                GeminiTheme.dpToPx(this@MainActivity, 8f),
-                GeminiTheme.dpToPx(this@MainActivity, 6f)
+                TaraTheme.dpToPx(this@MainActivity, 8f),
+                TaraTheme.dpToPx(this@MainActivity, 6f),
+                TaraTheme.dpToPx(this@MainActivity, 8f),
+                TaraTheme.dpToPx(this@MainActivity, 6f)
             )
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -172,7 +172,7 @@ class MainActivity : AppCompatActivity() {
         settingsView = SettingsView(this,
             onEnableHandsFree = {
                 androidx.appcompat.app.AlertDialog.Builder(this)
-                    .setTitle("Enable software wake listening?")
+                    .setTitle("Enable software wake listening for Hey Tara?")
                     .setMessage(dev.voice.offline.assistant.AssistantCapabilityChecker(this).hotwordDescription +
                         " Stop it using Cancel or the microphone notification.")
                     .setNegativeButton("Cancel", null)
@@ -196,7 +196,7 @@ class MainActivity : AppCompatActivity() {
                     try {
                         startActivity(Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
                     } catch (_: android.content.ActivityNotFoundException) {
-                        Toast.makeText(this, "Open Android Settings and choose the default digital assistant",
+                        Toast.makeText(this, "Open Android Settings and choose Tara as default digital assistant",
                             Toast.LENGTH_LONG).show()
                     }
                 }
@@ -211,8 +211,8 @@ class MainActivity : AppCompatActivity() {
             selectTab(TAB_HOME)
         }
 
-        // Setup Navigation Tabs with Gemini Vector Icons
-        setupTab(TAB_HOME, "Voice", R.drawable.ic_gemini_sparkle)
+        // Setup Navigation Tabs with TARA Vector Icons
+        setupTab(TAB_HOME, "Tara", R.drawable.ic_tara_logo)
         setupTab(TAB_COMMANDS, "Commands", R.drawable.ic_nav_commands)
         setupTab(TAB_NOTES, "Notes", R.drawable.ic_nav_notes)
         setupTab(TAB_SECURITY, "Security", R.drawable.ic_nav_security)
@@ -247,12 +247,12 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(
-                GeminiTheme.dpToPx(this@MainActivity, 14f),
-                GeminiTheme.dpToPx(this@MainActivity, 10f),
-                GeminiTheme.dpToPx(this@MainActivity, 14f),
-                GeminiTheme.dpToPx(this@MainActivity, 10f)
+                TaraTheme.dpToPx(this@MainActivity, 14f),
+                TaraTheme.dpToPx(this@MainActivity, 10f),
+                TaraTheme.dpToPx(this@MainActivity, 14f),
+                TaraTheme.dpToPx(this@MainActivity, 10f)
             )
-            background = GeminiTheme.createPillDrawable(
+            background = TaraTheme.createPillDrawable(
                 this@MainActivity,
                 fillColor = Color.TRANSPARENT,
                 strokeColor = Color.TRANSPARENT,
@@ -265,12 +265,16 @@ class MainActivity : AppCompatActivity() {
 
         val iconView = ImageView(this).apply {
             setImageDrawable(ContextCompat.getDrawable(this@MainActivity, iconResId))
-            setColorFilter(GeminiTheme.TextSecondary)
+            if (tag == TAB_HOME) {
+                clearColorFilter()
+            } else {
+                setColorFilter(TaraTheme.TextSecondary)
+            }
             layoutParams = LinearLayout.LayoutParams(
-                GeminiTheme.dpToPx(this@MainActivity, 18f),
-                GeminiTheme.dpToPx(this@MainActivity, 18f)
+                TaraTheme.dpToPx(this@MainActivity, 18f),
+                TaraTheme.dpToPx(this@MainActivity, 18f)
             ).apply {
-                setMargins(0, 0, GeminiTheme.dpToPx(this@MainActivity, 6f), 0)
+                setMargins(0, 0, TaraTheme.dpToPx(this@MainActivity, 6f), 0)
             }
         }
         tabItem.addView(iconView)
@@ -279,7 +283,7 @@ class MainActivity : AppCompatActivity() {
             text = label
             textSize = 12f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
-            setTextColor(GeminiTheme.TextSecondary)
+            setTextColor(TaraTheme.TextSecondary)
             gravity = Gravity.CENTER
         }
         tabItem.addView(labelView)
@@ -315,20 +319,28 @@ class MainActivity : AppCompatActivity() {
             val container = tabItemContainers[tabTag]
 
             if (tabTag == tag) {
-                iconView.setColorFilter(GeminiTheme.GeminiBlue)
-                labelView.setTextColor(GeminiTheme.TextPrimary)
+                if (tabTag == TAB_HOME) {
+                    iconView.clearColorFilter()
+                } else {
+                    iconView.setColorFilter(TaraTheme.TaraCyan)
+                }
+                labelView.setTextColor(TaraTheme.TextPrimary)
                 labelView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-                container?.background = GeminiTheme.createPillDrawable(
+                container?.background = TaraTheme.createPillDrawable(
                     this,
-                    fillColor = Color.parseColor("#222638"),
-                    strokeColor = GeminiTheme.GeminiBlue,
+                    fillColor = TaraTheme.TabActivePill,
+                    strokeColor = TaraTheme.TaraCyan,
                     strokeWidthDp = 1f
                 )
             } else {
-                iconView.setColorFilter(GeminiTheme.TextSecondary)
-                labelView.setTextColor(GeminiTheme.TextSecondary)
+                if (tabTag == TAB_HOME) {
+                    iconView.setColorFilter(TaraTheme.adjustAlpha(Color.WHITE, 0.45f))
+                } else {
+                    iconView.setColorFilter(TaraTheme.TextSecondary)
+                }
+                labelView.setTextColor(TaraTheme.TextSecondary)
                 labelView.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
-                container?.background = GeminiTheme.createPillDrawable(
+                container?.background = TaraTheme.createPillDrawable(
                     this,
                     fillColor = Color.TRANSPARENT,
                     strokeColor = Color.TRANSPARENT,

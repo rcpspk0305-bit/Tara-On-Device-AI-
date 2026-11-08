@@ -23,8 +23,8 @@ class SettingsView(context: Context,
     fun refreshAssistantStatus() {
         val roles = dev.voice.offline.assistant.AssistantRoleManager(context)
         assistantStatus?.text = when {
-            roles.isSelected -> "Voice is the selected assistant. Gestures depend on this device."
-            roles.isAvailable -> "Voice is not the selected assistant. Tap Choose to request the role."
+            roles.isSelected -> "Tara is the selected assistant. Gestures depend on this device."
+            roles.isAvailable -> "Tara is not the selected assistant. Tap Choose to request the role."
             else -> "Assistant role requests are unavailable. Manual activation remains available."
         }
     }
@@ -36,6 +36,7 @@ class SettingsView(context: Context,
         )
         isFillViewport = true
         overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
+        setBackgroundColor(GeminiTheme.Background)
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -69,7 +70,7 @@ class SettingsView(context: Context,
         headerRow.addView(headerIcon)
 
         val header = TextView(context).apply {
-            text = "Voice Settings"
+            text = "Tara Settings"
             textSize = 24f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(GeminiTheme.TextPrimary)
@@ -166,7 +167,7 @@ class SettingsView(context: Context,
         root.addView(assistantStatus)
         refreshAssistantStatus()
         root.addView(android.widget.Button(context).apply {
-            text = "Choose Voice as default assistant"
+            text = "Choose Tara as default assistant"
             setOnClickListener { onChooseAssistant() }
         })
         root.addView(android.widget.Button(context).apply {
@@ -174,7 +175,7 @@ class SettingsView(context: Context,
             setOnClickListener { onOpenAssistantSettings() }
         })
         root.addView(android.widget.Button(context).apply {
-            text = "Enable hands-free Hey Voice"
+            text = "Enable hands-free Hey Tara"
             setOnClickListener { onEnableHandsFree() }
         })
         root.addView(TextView(context).apply {
@@ -182,7 +183,7 @@ class SettingsView(context: Context,
             setTextColor(GeminiTheme.TextSecondary)
         })
 
-        addSettingItem("Wake Phrase", "“Hey Voice” / “Okay Voice”", "Optional Vosk software wake decoder. Microphone stays active; battery cost is unmeasured.")
+        addSettingItem("Wake Phrase", "“Hey Tara” / “Okay Tara”", "Optional Vosk software wake decoder. Microphone stays active; battery cost is unmeasured.")
         addSettingItem("Recognition Language", "Packaged English model", "Accuracy depends on the packaged Vosk model. Indian English accuracy needs device testing.")
         addSettingItem("Listening Sensitivity", "Standard (Cooldown 2.0s)", "Prevents false-positive duplicate triggers during conversations.")
         addSettingItem("Silence Timeout", "3.0 Seconds", "Automatically finishes recording command after user stops speaking.")

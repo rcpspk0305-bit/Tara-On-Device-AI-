@@ -26,6 +26,7 @@ class SecurityView(context: Context) : ScrollView(context) {
         )
         isFillViewport = true
         overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
+        setBackgroundColor(GeminiTheme.Background)
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL

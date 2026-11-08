@@ -128,7 +128,7 @@ class VoiceAssistantService : Service() {
                 @Suppress("DEPRECATION")
                 val receiver = intent.getParcelableExtra<ResultReceiver>(EXTRA_COMPLETION)
                 if (assistantJob?.isCompleted == false || isRunning.get()) {
-                    receiver?.send(1, Bundle().apply { putString("message", "Voice is already handling an interaction") })
+                    receiver?.send(1, Bundle().apply { putString("message", "Tara is already handling an interaction") })
                     return START_NOT_STICKY
                 }
                 synchronized(invocationLock) {
@@ -152,7 +152,7 @@ class VoiceAssistantService : Service() {
                 }
 
                 try {
-                    val notif = buildServiceNotification("Voice is initializing...")
+                    val notif = buildServiceNotification("Tara is initializing...")
                     if (Build.VERSION.SDK_INT >= 29) {
                         startForeground(
                             NOTIFICATION_ID_SERVICE,
@@ -217,7 +217,7 @@ class VoiceAssistantService : Service() {
             android.util.Log.i("VoiceLifecycle", "mode=$mode state=$state")
             if (state != AssistantState.IDLE && state != AssistantState.CLEANUP) {
                 updateServiceNotification(when (state) {
-                    AssistantState.WAKE_LISTENING -> "Hands-free: microphone active for Hey Voice"
+                    AssistantState.WAKE_LISTENING -> "Hands-free: microphone active for Hey Tara"
                     AssistantState.LISTENING -> "Microphone active: say one command"
                     else -> "Processing your command"
                 })
@@ -299,7 +299,17 @@ class VoiceAssistantService : Service() {
         }.also { if (it.isBlank()) _lastResultFlow.value = "No speech detected" }
 
     private suspend fun processTranscriptAction(transcript: String, transition: (AssistantState) -> Unit) {
-        when (val result = checkNotNull(functionGemmaEngine).inferAction(transcript)) {
+        val raw = transcript.trim().lowercase().replace(Regex("\\s+"), " ")
+        val commandText = raw.replace(Regex("^(?:hey|okay|hi|hello)?\\s*\\b(?:tara|voice)\\b[,\\s:]*"), "").trim()
+
+        if (commandText.isEmpty() || raw == "hey tara" || raw == "okay tara" || raw == "tara" || raw == "hello tara" || raw == "hi tara" || raw == "hey voice" || raw == "okay voice") {
+            transition(AssistantState.CONFIRMING)
+            playAckChime()
+            _lastResultFlow.value = "Hey! I'm Tara, your offline voice assistant. How can I help?"
+            return
+        }
+
+        when (val result = checkNotNull(functionGemmaEngine).inferAction(commandText)) {
             is FunctionGemmaResult.Success -> {
                 // The engine has already parsed and schema-validated this exact action.
                 transition(AssistantState.VALIDATING)
@@ -360,7 +370,7 @@ class VoiceAssistantService : Service() {
 
         val notification = Notification.Builder(this, CHANNEL_ACTION)
             .setSmallIcon(R.drawable.ic_mic)
-            .setContentTitle("Voice Action Approval")
+            .setContentTitle("Tara Action Approval")
             .setContentText("Tap to review and authorize ${action.functionName}. Expires in 30s.")
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -417,7 +427,7 @@ class VoiceAssistantService : Service() {
 
         return Notification.Builder(this, CHANNEL_SERVICE)
             .setSmallIcon(R.drawable.ic_mic)
-            .setContentTitle("Voice Assistant (Offline)")
+            .setContentTitle("Tara (Offline)")
             .setContentText(contentText)
             .setContentIntent(openApp)
             .addAction(Notification.Action.Builder(null, "Stop", stopAction).build())
@@ -436,7 +446,7 @@ class VoiceAssistantService : Service() {
     private fun notifyAlert(message: String) {
         val note = Notification.Builder(this, CHANNEL_ACTION)
             .setSmallIcon(R.drawable.ic_mic)
-            .setContentTitle("Voice Alert")
+            .setContentTitle("Tara Alert")
             .setContentText(message)
             .setAutoCancel(true)
             .build()

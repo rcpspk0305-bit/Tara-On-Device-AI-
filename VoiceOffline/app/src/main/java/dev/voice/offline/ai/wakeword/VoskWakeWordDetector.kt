@@ -11,7 +11,7 @@ class VoskWakeWordDetector(
     override var cooldownMs: Long = 2000L
 ) : WakeWordDetector {
 
-    private val recognizer = Recognizer(model, 16000f, "[\"hey voice\",\"okay voice\",\"[unk]\"]")
+    private val recognizer = Recognizer(model, 16000f, "[\"hey tara\",\"okay tara\",\"tara\",\"hey voice\",\"okay voice\",\"[unk]\"]")
     private var cooldownDeadline = 0L
 
     override fun detect(buffer: ShortArray, count: Int): WakeWordResult {
@@ -23,7 +23,7 @@ class VoskWakeWordDetector(
         if (recognizer.acceptWaveForm(buffer, count)) {
             val text = parseResultText(recognizer.result)
             recognizer.reset()
-            if (text == "hey voice" || text == "okay voice") {
+            if (text == "hey tara" || text == "okay tara" || text == "tara" || text == "hey voice" || text == "okay voice") {
                 cooldownDeadline = now + cooldownMs
                 return WakeWordResult.Detected(text)
             }

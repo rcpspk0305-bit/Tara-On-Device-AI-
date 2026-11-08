@@ -9,7 +9,7 @@ flowchart TD
     subgraph Audio_Pipeline ["Audio Processing Pipeline (16 kHz Mono PCM)"]
         MIC[AudioRecordManager] -->|16-bit PCM Chunks| RING[AudioRingBuffer (10s)]
         RING --> WAKE[VoskWakeWordDetector]
-        WAKE -->|Wake Detected: 'Hey Voice'| VAD[VoskSpeechRecognizer (VAD)]
+        WAKE -->|Wake Detected: 'Hey Tara'| VAD[VoskSpeechRecognizer (VAD)]
         VAD -->|Command Audio| STT[Offline Speech-to-Text]
     end
 
@@ -55,7 +55,7 @@ flowchart TD
 ### 2.1 Audio Pipeline & Wake Word Detection
 - **Audio Capture (`AudioRecordManager`)**: Runs on a dedicated background `Dispatchers.IO` coroutine. Captures standard 16,000 Hz, 16-bit Mono PCM audio frames (1,280 bytes / 40 ms per frame).
 - **Ring Buffer (`AudioRingBuffer`)**: Fixed-size non-allocating circular memory buffer storing up to 10 seconds of uncompressed PCM audio. Prevents audio clipping and allows capturing speech onset before wake detection.
-- **Wake Word Detector (`VoskWakeWordDetector`)**: Listens continuously for trigger phrases `"hey voice"` and `"okay voice"`. Implements a 2,000 ms cooldown debounce timer to prevent acoustic feedback loops.
+- **Wake Word Detector (`VoskWakeWordDetector`)**: Listens continuously for trigger phrases `"hey tara"` and `"okay tara"` (and backwards-compatible `"hey voice"`). Implements a 2,000 ms cooldown debounce timer to prevent acoustic feedback loops.
 - **Voice Activity Detection (`VoskSpeechRecognizer`)**: Detects start of speech and endpoint silence. Closes speech input automatically after 3 seconds of sustained silence or 7 seconds maximum recording duration.
 
 ### 2.2 FunctionGemma Inference Engine

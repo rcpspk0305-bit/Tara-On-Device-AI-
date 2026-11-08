@@ -33,7 +33,7 @@ software hands-free mode and the Android default-assistant role request. See
 flowchart LR
     A[Microphone 16kHz PCM] --> B[AudioRingBuffer]
     B --> C[VoskWakeWordDetector]
-    C -->|'Hey Voice'| D[VoskSpeechRecognizer VAD]
+    C -->|'Hey Tara'| D[VoskSpeechRecognizer VAD]
     D -->|Transcript| E[FunctionCallingPromptBuilder]
     E --> F[FunctionGemma 270M LiteRT-LM]
     F --> G[FunctionCallParser]
@@ -80,8 +80,8 @@ Voice supports 13 native mobile actions with strict parameter schema validation:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/rcpspk0305-bit/Mobile-Voice-Agent.git
-cd Mobile-Voice-Agent/VoiceOffline
+git clone https://github.com/rcpspk0305-bit/Tara-On-Device-AI-.git
+cd Tara-On-Device-AI-/VoiceOffline
 ```
 
 ### 2. Configure Local Properties

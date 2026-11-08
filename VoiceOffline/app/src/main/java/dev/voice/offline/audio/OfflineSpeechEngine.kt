@@ -7,7 +7,7 @@ import org.vosk.Recognizer
 /** One microphone stream, two isolated decoding states; no network or Android SpeechRecognizer. */
 class OfflineSpeechEngine(modelPath: String, private val onCommand: (String) -> Unit) : SpeechPipeline {
     private val model = Model(modelPath)
-    private val wake = Recognizer(model, 16000f, "[\"hey voice\",\"okay voice\",\"[unk]\"]")
+    private val wake = Recognizer(model, 16000f, "[\"hey tara\",\"okay tara\",\"tara\",\"hey voice\",\"okay voice\",\"[unk]\"]")
     private val command = Recognizer(model, 16000f)
     private var listeningForCommand = false
     private var active = false
@@ -46,7 +46,7 @@ class OfflineSpeechEngine(modelPath: String, private val onCommand: (String) -> 
         } else {
             if (wake.acceptWaveForm(buffer, count)) {
                 val recognized = JSONObject(wake.result).optString("text")
-                if (recognized == "hey voice" || recognized == "okay voice") {
+                if (recognized == "hey tara" || recognized == "okay tara" || recognized == "tara" || recognized == "hey voice" || recognized == "okay voice") {
                     listeningForCommand = true
                     commandDeadlineNanos = System.nanoTime() + 7_000_000_000L
                     command.reset()

@@ -37,6 +37,7 @@ class CommandsView(context: Context) : ScrollView(context) {
         )
         isFillViewport = true
         overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
+        setBackgroundColor(GeminiTheme.Background)
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -78,7 +79,7 @@ class CommandsView(context: Context) : ScrollView(context) {
         headerRow.addView(header)
 
         val subheader = TextView(context).apply {
-            text = "13 native on-device actions parsed by FunctionGemma 270M. Say 'Hey Voice' followed by:"
+            text = "13 native on-device actions parsed by FunctionGemma 270M. Say 'Hey Tara' followed by:"
             textSize = 13f
             setTextColor(GeminiTheme.TextSecondary)
             setPadding(0, 0, 0, GeminiTheme.dpToPx(context, 16f))
@@ -217,7 +218,7 @@ class CommandsView(context: Context) : ScrollView(context) {
                         isClickable = true
                         isFocusable = true
                         setOnClickListener {
-                            Toast.makeText(context, "Say: “Hey Voice, $ex”", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Say: “Hey Tara, $ex”", Toast.LENGTH_SHORT).show()
                         }
                     }
                     exampleContainer.addView(exView)

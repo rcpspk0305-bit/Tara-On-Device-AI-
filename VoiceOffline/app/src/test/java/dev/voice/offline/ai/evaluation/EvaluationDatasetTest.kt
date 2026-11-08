@@ -49,6 +49,10 @@ class EvaluationDatasetTest {
         EvalTestCase("C13", "CLEAR", "Take a note buy groceries", true, "TakeNotes"),
         EvalTestCase("C14", "CLEAR", "Open WhatsApp", true, "OpenApp"),
         EvalTestCase("C15", "CLEAR", "Open Camera", true, "OpenCamera"),
+        EvalTestCase("HT01", "CLEAR", "Hey Tara, turn on the flashlight", true, "TurnFlashlightOn"),
+        EvalTestCase("HT02", "CLEAR", "Hey Tara, call Rahul", true, "MakeCall"),
+        EvalTestCase("HT03", "CLEAR", "Hey Tara open camera", true, "OpenCamera"),
+        EvalTestCase("HT04", "CLEAR", "Okay Tara, lock screen", true, "LockScreen"),
 
         // Category 2: Indian English Pronunciations & Phrasing (10 cases)
         EvalTestCase("IE01", "INDIAN_ENGLISH", "Torch on karo", true, "TurnFlashlightOn"),

@@ -115,4 +115,20 @@ class FunctionGemmaEngineTest {
         assertTrue(report.averageLatencyMs >= 0)
         assertEquals(1.0, report.successRate, 0.01)
     }
+
+    @Test
+    fun testEmulatedAdapterHandlesHeyTaraPrefix() = runBlocking {
+        val adapter = EmulatedLiteRtInferenceAdapter()
+        adapter.initialize()
+        val engine = FunctionGemmaEngine(adapter)
+
+        val result1 = engine.inferAction("Hey Tara, turn on flashlight")
+        assertTrue(result1 is FunctionGemmaResult.Success)
+        assertEquals(StructuredAction.TurnFlashlightOn, (result1 as FunctionGemmaResult.Success).action)
+
+        val result2 = engine.inferAction("Hey Tara call Amma")
+        assertTrue(result2 is FunctionGemmaResult.Success)
+        val action2 = (result2 as FunctionGemmaResult.Success).action as StructuredAction.MakeCall
+        assertEquals("amma", action2.contactName.lowercase())
+    }
 }

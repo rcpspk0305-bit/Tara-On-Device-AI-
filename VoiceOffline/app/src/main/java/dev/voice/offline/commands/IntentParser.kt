@@ -3,7 +3,8 @@ package dev.voice.offline.commands
 /** Exact patterns avoid silently turning uncertain speech into sensitive side effects. */
 class IntentParser {
     fun parse(transcript: String): VoiceCommand? {
-        val text = transcript.trim().lowercase().replace(Regex("\\s+"), " ")
+        val raw = transcript.trim().lowercase().replace(Regex("\\s+"), " ")
+        val text = raw.replace(Regex("^(?:hey|okay|hi|hello)?\\s*\\b(?:tara|voice)\\b[,\\s:]*"), "").trim()
         if (text == "answer call" || text == "answer the call" || text == "pick up the phone")
             return VoiceCommand.AnswerCall
         if (text == "lock screen" || text == "lock my phone" || text == "lock the phone")

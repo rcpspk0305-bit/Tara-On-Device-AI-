@@ -26,6 +26,7 @@ class NotesView(context: Context) : ScrollView(context) {
         )
         isFillViewport = true
         overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
+        setBackgroundColor(GeminiTheme.Background)
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -170,7 +171,7 @@ class NotesView(context: Context) : ScrollView(context) {
             emptyCard.addView(emptyTitle)
 
             val emptyDesc = TextView(context).apply {
-                text = "Say: “Hey Voice, take a note buy groceries” to encrypt your first on-device note."
+                text = "Say: “Hey Tara, take a note buy groceries” to encrypt your first on-device note."
                 textSize = 13f
                 setTextColor(GeminiTheme.TextSecondary)
                 gravity = Gravity.CENTER

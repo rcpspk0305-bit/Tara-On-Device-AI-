@@ -43,27 +43,28 @@ class AudioPipelineTest {
         var cooldownNanos = 0L
         val cooldownDurationNanos = 2_000_000_000L // 2 seconds
 
-        fun checkWakeWord(isDetected: Boolean, currentNanos: Long): WakeWordResult {
+        fun checkWakeWord(isDetected: Boolean, phrase: String, currentNanos: Long): WakeWordResult {
             if (currentNanos < cooldownNanos) {
                 return WakeWordResult.InCooldown
             }
             if (isDetected) {
                 cooldownNanos = currentNanos + cooldownDurationNanos
-                return WakeWordResult.Detected("Hey Voice")
+                return WakeWordResult.Detected(phrase)
             }
             return WakeWordResult.None
         }
 
         val t0 = 10_000_000_000L
-        val res1 = checkWakeWord(true, t0)
+        val res1 = checkWakeWord(true, "Hey Tara", t0)
         assertTrue(res1 is WakeWordResult.Detected)
+        assertEquals("Hey Tara", (res1 as WakeWordResult.Detected).phrase)
 
         // During cooldown: suppressed
-        val res2 = checkWakeWord(true, t0 + 1_000_000_000L)
+        val res2 = checkWakeWord(true, "Hey Tara", t0 + 1_000_000_000L)
         assertTrue(res2 is WakeWordResult.InCooldown)
 
         // After cooldown: ready again
-        val res3 = checkWakeWord(true, t0 + 2_500_000_000L)
+        val res3 = checkWakeWord(true, "Hey Tara", t0 + 2_500_000_000L)
         assertTrue(res3 is WakeWordResult.Detected)
     }
 }
