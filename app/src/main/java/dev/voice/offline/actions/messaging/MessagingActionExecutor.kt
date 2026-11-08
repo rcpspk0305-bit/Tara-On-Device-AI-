@@ -43,6 +43,13 @@ class MessagingActionExecutor(
             return ExecutionResult.Failed("Message body cannot be empty")
         }
 
+        if (!ContactResolver.isPhoneNumber(rawTarget) && !hasContactsPermission()) {
+            return ExecutionResult.RequiresPermission(
+                Manifest.permission.READ_CONTACTS,
+                "Permission required to look up $rawTarget"
+            )
+        }
+
         val (displayName, phoneNumber) = when (val res = resolver.resolve(rawTarget)) {
             is ContactResolution.DirectNumber -> Pair(res.phoneNumber, res.phoneNumber)
             is ContactResolution.Resolved -> Pair(res.contact.displayName, res.selectedNumber)
@@ -54,12 +61,6 @@ class MessagingActionExecutor(
                 )
             }
             is ContactResolution.NotFound -> {
-                if (!hasContactsPermission()) {
-                    return ExecutionResult.RequiresPermission(
-                        Manifest.permission.READ_CONTACTS,
-                        "Permission required to look up $rawTarget"
-                    )
-                }
                 return ExecutionResult.Failed("Could not resolve phone number for '$rawTarget'")
             }
         }

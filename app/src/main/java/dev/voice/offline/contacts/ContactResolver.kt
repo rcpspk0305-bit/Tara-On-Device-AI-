@@ -42,6 +42,11 @@ class ContactResolver(
 ) {
     companion object {
         private val PHONE_NUMBER_REGEX = Regex("""^\+?[0-9\s\-().]{3,25}$""")
+
+        fun isPhoneNumber(query: String): Boolean {
+            val digitsCount = query.count { it.isDigit() }
+            return digitsCount >= 3 && PHONE_NUMBER_REGEX.matches(query.trim())
+        }
     }
 
     fun resolve(rawQuery: String): ContactResolution {
@@ -88,11 +93,6 @@ class ContactResolver(
         // 6. Select appropriate phone number based on preferred type
         val selectedNumber = selectNumber(contact.numbers, preferredType)
         return ContactResolution.Resolved(contact, selectedNumber)
-    }
-
-    private fun isPhoneNumber(query: String): Boolean {
-        val digitsCount = query.count { it.isDigit() }
-        return digitsCount >= 3 && PHONE_NUMBER_REGEX.matches(query)
     }
 
     private fun normalizeDigits(raw: String): String {

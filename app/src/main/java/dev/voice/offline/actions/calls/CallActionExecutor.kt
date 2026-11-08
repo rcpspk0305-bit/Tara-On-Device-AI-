@@ -38,6 +38,13 @@ class CallActionExecutor(
             return ExecutionResult.Failed("No contact name or phone number specified")
         }
 
+        if (!ContactResolver.isPhoneNumber(rawTarget) && !hasContactsPermission()) {
+            return ExecutionResult.RequiresPermission(
+                Manifest.permission.READ_CONTACTS,
+                "Read contacts permission required to look up $rawTarget"
+            )
+        }
+
         val (displayName, phoneNumber) = when (val res = resolver.resolve(rawTarget)) {
             is ContactResolution.DirectNumber -> Pair(res.phoneNumber, res.phoneNumber)
             is ContactResolution.Resolved -> Pair(res.contact.displayName, res.selectedNumber)
@@ -49,12 +56,6 @@ class CallActionExecutor(
                 )
             }
             is ContactResolution.NotFound -> {
-                if (!hasContactsPermission()) {
-                    return ExecutionResult.RequiresPermission(
-                        Manifest.permission.READ_CONTACTS,
-                        "Read contacts permission required to look up $rawTarget"
-                    )
-                }
                 return ExecutionResult.Failed("No contact found matching '$rawTarget'")
             }
         }
