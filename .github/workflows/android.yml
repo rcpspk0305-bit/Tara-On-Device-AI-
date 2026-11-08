@@ -16,9 +16,6 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: VoiceOffline
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,14 +48,14 @@ jobs:
         with:
           name: android-reports
           path: |
-            VoiceOffline/app/build/reports/
-            VoiceOffline/app/build/test-results/
+            app/build/reports/
+            app/build/test-results/
           if-no-files-found: warn
           retention-days: 7
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: voice-offline-debug
-          path: VoiceOffline/app/build/outputs/apk/offline/debug/*.apk
+          path: app/build/outputs/apk/offline/debug/*.apk
           if-no-files-found: error
           retention-days: 7
