@@ -26,3 +26,4 @@ class NavigationActionExecutorTest {
         assertTrue(result.message.contains("Could not navigate home"))
     }
 }
+

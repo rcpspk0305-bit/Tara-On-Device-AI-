@@ -52,3 +52,4 @@ class SettingsActionExecutorTest {
         assertTrue(result.message.contains("Could not open settings"))
     }
 }
+
