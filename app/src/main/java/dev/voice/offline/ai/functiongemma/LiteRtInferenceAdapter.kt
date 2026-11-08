@@ -111,6 +111,40 @@ class EmulatedLiteRtInferenceAdapter : LiteRtInferenceAdapter {
                 "<start_function_call>call:take_notes{content:<escape>$content<escape>}<end_function_call>"
             }
 
+            // Settings
+            userTurn.contains("settings") -> {
+                val type = when {
+                    userTurn.contains("wifi") || userTurn.contains("wi-fi") -> "wifi"
+                    userTurn.contains("bluetooth") -> "bluetooth"
+                    userTurn.contains("sound") || userTurn.contains("audio") -> "sound"
+                    userTurn.contains("display") || userTurn.contains("brightness") -> "display"
+                    userTurn.contains("battery") -> "battery"
+                    else -> "general"
+                }
+                "<start_function_call>call:open_settings{setting_type:<escape>$type<escape>}<end_function_call>"
+            }
+
+            // Volume Control
+            userTurn.contains("volume") || userTurn == "mute" || userTurn == "unmute" -> {
+                val dir = when {
+                    userTurn.contains("up") || userTurn.contains("raise") || userTurn.contains("increase") -> "up"
+                    userTurn.contains("down") || userTurn.contains("lower") || userTurn.contains("decrease") -> "down"
+                    userTurn.contains("unmute") -> "unmute"
+                    userTurn.contains("mute") -> "mute"
+                    userTurn.contains("set") || userTurn.contains("to ") -> "set"
+                    else -> "up"
+                }
+                val percentMatch = Regex("""\b(\d{1,3})%?\b""").find(userTurn)
+                val percent = percentMatch?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(0, 100)
+                val percentArg = if (percent != null && dir == "set") ",percent:$percent" else ""
+                "<start_function_call>call:adjust_volume{direction:<escape>$dir<escape>$percentArg}<end_function_call>"
+            }
+
+            // Navigation
+            userTurn == "go home" || userTurn == "navigate to home" || userTurn == "navigate home" ||
+            userTurn == "home screen" || userTurn == "open home" ->
+                "<start_function_call>call:navigate_home{}<end_function_call>"
+
             // Apps
             userTurn.startsWith("open ") || userTurn.startsWith("launch ") -> {
                 val app = userTurn.substringAfter(" ").trim()
@@ -127,12 +161,22 @@ class EmulatedLiteRtInferenceAdapter : LiteRtInferenceAdapter {
 
             // SMS / Messages
             userTurn.contains("sms") || userTurn.contains("text ") || userTurn.contains("message ") -> {
-                val afterTo = if (userTurn.contains("to ")) userTurn.substringAfter("to ") else userTurn.substringAfter("message ")
-                val contact = afterTo.substringBefore(" saying").substringBefore(" see").substringBefore(" heading").trim()
+                val afterPrefix = when {
+                    userTurn.contains(" to ") -> userTurn.substringAfter(" to ")
+                    userTurn.startsWith("message ") -> userTurn.removePrefix("message ")
+                    userTurn.startsWith("text ") -> userTurn.removePrefix("text ")
+                    userTurn.contains("message ") -> userTurn.substringAfter("message ")
+                    userTurn.contains("text ") -> userTurn.substringAfter("text ")
+                    else -> userTurn
+                }
+                val separator = listOf(" saying ", " that ", " see ", " heading ", " with ").firstOrNull { afterPrefix.contains(it) }
+                val contact = if (separator != null) afterPrefix.substringBefore(separator).trim() else afterPrefix.substringBefore(" ").trim()
                 val body = when {
-                    userTurn.contains("saying ") -> userTurn.substringAfter("saying ").trim()
-                    userTurn.contains(" see ") -> "see " + userTurn.substringAfter(" see ").trim()
-                    userTurn.contains(" heading ") -> "heading " + userTurn.substringAfter(" heading ").trim()
+                    separator != null && separator.trim() == "see" -> "see " + afterPrefix.substringAfter(separator).trim()
+                    separator != null && separator.trim() == "heading" -> "heading " + afterPrefix.substringAfter(separator).trim()
+                    separator != null -> afterPrefix.substringAfter(separator).trim()
+                    userTurn.contains(" saying ") -> userTurn.substringAfter(" saying ").trim()
+                    userTurn.contains(" that ") -> userTurn.substringAfter(" that ").trim()
                     else -> "Message"
                 }
                 "<start_function_call>call:text_msg{contact_name:<escape>$contact<escape>,body:<escape>$body<escape>}<end_function_call>"

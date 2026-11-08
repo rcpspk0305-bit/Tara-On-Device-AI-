@@ -146,5 +146,8 @@ class AuthorizationActivity : AppCompatActivity() {
         StructuredAction.RejectCall -> "Reject incoming call"
         StructuredAction.ReadNotifications -> "Read recent notifications"
         is StructuredAction.OpenApp -> "Open app: ${action.packageName}"
+        is StructuredAction.OpenSettings -> "Open settings: ${action.settingType}"
+        is StructuredAction.AdjustVolume -> "Adjust volume: ${action.direction} ${if (action.percent != null) "${action.percent}%" else ""}".trim()
+        StructuredAction.NavigateHome -> "Navigate to home screen"
     }
 }

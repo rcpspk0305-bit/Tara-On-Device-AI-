@@ -24,7 +24,10 @@ object FunctionSchemaValidator {
         "turn_flashlight_off" to emptySet(),
         "text_msg" to setOf("contact_name", "body"),
         "read_notifications" to emptySet(),
-        "reply_to_notification" to setOf("notification_id", "body")
+        "reply_to_notification" to setOf("notification_id", "body"),
+        "open_settings" to setOf("setting_type"),
+        "adjust_volume" to setOf("direction", "percent"),
+        "navigate_home" to emptySet()
     )
 
     fun validate(raw: RawFunctionCall): ValidationResult {
@@ -138,6 +141,29 @@ object FunctionSchemaValidator {
                 } else {
                     ValidationResult.Valid(StructuredAction.ReplyToNotification(notificationId, body))
                 }
+            }
+
+            "open_settings" -> {
+                val type = raw.arguments["setting_type"]?.trim()?.lowercase() ?: "general"
+                ValidationResult.Valid(StructuredAction.OpenSettings(type))
+            }
+
+            "adjust_volume" -> {
+                val dir = raw.arguments["direction"]?.trim()?.lowercase()
+                if (dir.isNullOrBlank() || dir !in setOf("up", "down", "mute", "unmute", "set")) {
+                    ValidationResult.Invalid("Invalid direction for adjust_volume: $dir (must be up, down, mute, unmute, or set)")
+                } else {
+                    val percent = raw.arguments["percent"]?.toIntOrNull()
+                    if (percent != null && percent !in 0..100) {
+                        ValidationResult.Invalid("Volume percent must be between 0 and 100")
+                    } else {
+                        ValidationResult.Valid(StructuredAction.AdjustVolume(dir, percent))
+                    }
+                }
+            }
+
+            "navigate_home" -> {
+                ValidationResult.Valid(StructuredAction.NavigateHome)
             }
 
             else -> {
