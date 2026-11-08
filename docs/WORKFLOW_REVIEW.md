@@ -36,7 +36,6 @@ Existing uncommitted UI changes were preserved. No commits or remote changes wer
 Seven regression failures were reproduced before their repairs. The final command was:
 
 ```powershell
-cd VoiceOffline
 .\gradlew.bat testOfflineDebugUnitTest lintOfflineDebug assembleOfflineDebug --offline --no-daemon --console=plain
 ```
 
@@ -50,7 +49,7 @@ cd VoiceOffline
 | Device microphone, native actions, biometrics, shutdown behavior | NOT TESTED |
 | Hosted GitHub Actions run | NOT TESTED; workflow changes are local |
 
-The APK is `VoiceOffline/app/build/outputs/apk/offline/debug/app-offline-debug.apk`.
+The APK is `app/build/outputs/apk/offline/debug/app-offline-debug.apk`.
 It is a debug artifact, not a signed release or evidence of hardware behavior.
 
 ## Limits

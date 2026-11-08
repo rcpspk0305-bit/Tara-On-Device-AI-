@@ -85,7 +85,7 @@ Voice uses Vosk for local wake phrase detection and speech recognition without n
 2. Unpack the zip file.
 3. Copy the extracted folders (`am/`, `conf/`, `graph/`, `ivector/`) into:
    ```
-   VoiceOffline/app/src/main/assets/vosk-model/
+   app/src/main/assets/vosk-model/
    ```
 4. Verify the directory structure:
    ```

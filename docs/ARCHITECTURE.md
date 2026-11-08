@@ -127,3 +127,30 @@ States are broadcast via Kotlin `StateFlow<AssistantState>` to UI components and
 | `set_alarm` | `hour` (int 0..23), `minute` (int 0..59), `label` (string) | MEDIUM | Sets native system alarm |
 | `take_notes` | `content` (string) | LOW | Encrypts and saves local note |
 | `open_app` | `package_name` (string) | LOW | Launches installed application |
+
+---
+
+## 4. Package Architecture (`app/src/main/java/dev/voice/offline/`)
+
+The application is structured into decoupled modules:
+
+- **`actions/`**: Action execution registry and 13 native Android action handlers (`CallActionExecutor`, `MessagingActionExecutor`, `NoteActionExecutor`, etc.).
+- **`ai/`**: Complete on-device intelligence pipeline:
+  - `ai.wakeword`: Continuous wake-word detection (`VoskWakeWordDetector`).
+  - `ai.stt`: Offline speech recognition (`VoskSpeechRecognizer`, `OfflineSpeechEngine`, `AssetModelInstaller`).
+  - `ai.functioncalling`: Grammar parser, schema validator, and structured action models.
+  - `ai.functiongemma`: LiteRT inference adapter and model manager.
+  - `ai.benchmark`: Latency and memory benchmarking tools.
+  - `ai.commands`: Intent parser fallback and legacy command models.
+- **`assistant/`**: Android system platform assistant integration (`VoiceInteractionService`, `VoiceInteractionSession`, `OfflineRecognitionService`, `AssistantRoleManager`).
+- **`core/`**: Low-level infrastructure and hardware boundaries:
+  - `core.audio`: `AudioRecordManager`, `AudioRingBuffer`, `Mfcc39Extractor`, `SpeechPipeline`.
+  - `core.security`: `KeystoreManager`, `BiometricSigner`, `BiometricAuthorizationManager`, `PendingCommandStore`, `SensitiveActionPolicy`.
+  - `core.storage`: `PrivateNoteStore` (AES-256-GCM hardware-backed storage).
+  - `core.system`: Android OS receivers (`VoiceAdminReceiver`, `ReplyNotificationListener`, `ActionExecutor`).
+- **`service/`**: Background and foreground worker lifecycle (`VoiceAssistantService`, `AssistantSessionController`, `AssistantState`).
+- **`ui/`**: Presentation layer and design system:
+  - `ui.features`: UI views and settings (`HomeView`, `CommandsView`, `NotesView`, `PermissionsView`, `SettingsView`, `SecurityView`, `AboutView`, `OnboardingView`).
+  - `ui.components`: Custom drawing widgets (`TaraOrbView`, `TaraAudioVisualizerView`).
+  - `ui.security`: Sensitive action prompt activity (`AuthorizationActivity`).
+  - `ui.theme`: Cyber-neon design tokens and drawables (`TaraTheme`).

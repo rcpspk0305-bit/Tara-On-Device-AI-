@@ -104,10 +104,10 @@ workflow. Wake/STT accuracy, inference latency, memory and one-hour battery meas
 
 ## Reproduction
 
-From VoiceOffline with JDK 17 and Android SDK 36 installed:
+From the repository root with JDK 17 and Android SDK 36 installed:
 
 ```powershell
-./gradlew.bat testOfflineDebugUnitTest lintOfflineDebug assembleOfflineDebug --offline --no-daemon --console=plain
+.\gradlew.bat testOfflineDebugUnitTest lintOfflineDebug assembleOfflineDebug --offline --no-daemon --console=plain
 ```
 
 From the repository root:
