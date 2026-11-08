@@ -98,6 +98,12 @@ class DefaultOnnxInferenceRunner(
             if (offset >= INPUT_DIM) break
         }
 
+        // Dispatch to ONNX Runtime session if available
+        if (isOrtAvailable && ortSession != null) {
+            val ortResult = runOrtInference(flat)
+            if (ortResult != null) return ortResult
+        }
+
         // Layer 1: Gemm + ReLU
         val hidden = FloatArray(HIDDEN_DIM)
         for (h in 0 until HIDDEN_DIM) {
@@ -128,6 +134,51 @@ class DefaultOnnxInferenceRunner(
         val exp1 = exp(logits[1] - maxLogit)
         val sumExp = exp0 + exp1
         return floatArrayOf(exp0 / sumExp, exp1 / sumExp)
+    }
+
+    private fun runOrtInference(flat: FloatArray): FloatArray? {
+        return try {
+            val session = ortSession ?: return null
+            val envClass = Class.forName("ai.onnxruntime.OrtEnvironment")
+            val getEnvMethod = envClass.getMethod("getEnvironment")
+            val env = getEnvMethod.invoke(null)
+
+            val tensorClass = Class.forName("ai.onnxruntime.OnnxTensor")
+            val getInputNamesMethod = session.javaClass.getMethod("getInputNames")
+            @Suppress("UNCHECKED_CAST")
+            val inputNames = getInputNamesMethod.invoke(session) as? java.util.Set<String> ?: return null
+            val inputName = inputNames.firstOrNull() ?: "input"
+
+            val createTensorMethod = tensorClass.getMethod(
+                "createTensor",
+                envClass,
+                java.nio.FloatBuffer::class.java,
+                LongArray::class.java
+            )
+            val buffer = java.nio.FloatBuffer.wrap(flat)
+            val shape = longArrayOf(1, FRAMES.toLong(), COEFFS.toLong())
+            val tensor = createTensorMethod.invoke(null, env, buffer, shape)
+
+            val runMethod = session.javaClass.getMethod("run", Map::class.java)
+            val inputMap = java.util.Collections.singletonMap(inputName, tensor)
+            val results = runMethod.invoke(session, inputMap)
+
+            val getMethod = results.javaClass.getMethod("get", Int::class.javaPrimitiveType)
+            val outputValue = getMethod.invoke(results, 0)
+            val getValueMethod = outputValue.javaClass.getMethod("getValue")
+            val rawOutput = getValueMethod.invoke(outputValue)
+
+            results.javaClass.getMethod("close").invoke(results)
+            tensor.javaClass.getMethod("close").invoke(tensor)
+
+            when (rawOutput) {
+                is Array<*> -> (rawOutput.firstOrNull() as? FloatArray)
+                is FloatArray -> rawOutput
+                else -> null
+            }
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     override fun close() {

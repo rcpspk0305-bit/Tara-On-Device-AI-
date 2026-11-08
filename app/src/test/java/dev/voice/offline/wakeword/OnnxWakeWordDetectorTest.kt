@@ -109,6 +109,20 @@ class OnnxWakeWordDetectorTest {
     }
 
     @Test
+    fun testLongRunningBufferNoOverflow() {
+        val runner = MockRunner { 0.1f }
+        val detector = OnnxWakeWordDetector(runner = runner, sensitivity = 0.65f, cooldownMs = 2000L)
+
+        val audio = ShortArray(1600)
+        // Feed 100 blocks (160,000 samples) - well past 1.0s window
+        for (i in 0 until 100) {
+            val r = detector.detect(audio, audio.size)
+            assertEquals(WakeWordResult.None, r)
+        }
+        detector.close()
+    }
+
+    @Test
     fun testDefaultRunnerAcousticEvaluation() {
         val runner = DefaultOnnxInferenceRunner()
         val dummyFeatures = Array(98) { FloatArray(39) { 0.05f } }

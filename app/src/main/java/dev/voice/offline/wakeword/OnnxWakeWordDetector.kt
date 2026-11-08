@@ -38,13 +38,15 @@ class OnnxWakeWordDetector(
             return WakeWordResult.InCooldown
         }
 
+        val safeCount = minOf(count, buffer.size)
+
         // Buffer audio chunks
-        for (i in 0 until count) {
+        for (i in 0 until safeCount) {
             ringBuffer[writePos] = buffer[i]
             writePos = (writePos + 1) % WINDOW_SIZE
-            totalSamplesBuffered++
-            samplesSinceLastInference++
         }
+        totalSamplesBuffered = minOf(WINDOW_SIZE, totalSamplesBuffered + safeCount)
+        samplesSinceLastInference += safeCount
 
         // Wait until we have accumulated at least 1.0s and reached a 100ms hop
         if (totalSamplesBuffered < WINDOW_SIZE || samplesSinceLastInference < HOP_SIZE) {
