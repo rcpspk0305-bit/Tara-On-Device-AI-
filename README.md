@@ -81,11 +81,11 @@ Voice supports 13 native mobile actions with strict parameter schema validation:
 ### 1. Clone the Repository
 ```bash
 git clone https://github.com/rcpspk0305-bit/Tara-On-Device-AI-.git
-cd Tara-On-Device-AI-/VoiceOffline
+cd Tara-On-Device-AI-
 ```
 
 ### 2. Configure Local Properties
-Create `VoiceOffline/local.properties`:
+Create `local.properties`:
 ```properties
 sdk.dir=C\:\\Users\\<YourUsername>\\AppData\\Local\\Android\\Sdk
 ```
@@ -99,6 +99,52 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
 To assemble the offline debug APK:
 ```powershell
 .\gradlew.bat assembleOfflineDebug
+```
+
+---
+
+## Project Structure
+
+The project follows a standard root-level Gradle layout and a modular, clean-architecture Kotlin package structure:
+
+```
+Tara- On Device AI/
+├── .github/workflows/          # Continuous integration (build, unit tests, lint)
+├── app/                        # Android application module
+│   ├── src/main/
+│   │   ├── assets/             # On-device Vosk models
+│   │   ├── java/dev/voice/offline/
+│   │   │   ├── actions/        # 13 native action handlers & ActionExecutorRegistry
+│   │   │   ├── ai/             # STT, Vosk wake word, FunctionGemma & prompt parsing
+│   │   │   │   ├── benchmark/  # Model benchmarking & latency metrics
+│   │   │   │   ├── commands/   # Intent parsing & command schema definitions
+│   │   │   │   ├── functioncalling/ # Schema validator, parser & function declarations
+│   │   │   │   ├── functiongemma/   # LiteRT inference adapter & model manager
+│   │   │   │   ├── stt/        # Offline speech recognizer & asset model installer
+│   │   │   │   └── wakeword/   # Offline wake word detection ('Hey Tara')
+│   │   │   ├── assistant/      # VoiceInteractionService, session & role managers
+│   │   │   ├── core/           # Low-level infrastructure & hardware bindings
+│   │   │   │   ├── audio/      # AudioRecordManager, ring buffer, MFCC extractor
+│   │   │   │   ├── security/   # Keystore AES-256, BiometricPrompt, pending commands
+│   │   │   │   ├── storage/    # Encrypted private note store
+│   │   │   │   └── system/     # System receivers & notification reply listeners
+│   │   │   ├── service/        # Foreground microphone worker & session controller
+│   │   │   └── ui/             # Presentation layer
+│   │   │       ├── components/ # Tara visualizer & orb views
+│   │   │       ├── features/   # Home, Commands, Notes, Permissions, Settings, Security
+│   │   │       ├── security/   # Biometric AuthorizationActivity
+│   │   │       └── theme/      # TaraTheme design tokens
+│   │   └── res/                # Vector drawables, XML service & admin configs
+│   ├── build.gradle.kts        # App build configuration & dependencies
+│   └── proguard-rules.pro      # Code shrinking & obfuscation rules
+├── docs/                       # Architecture, security, and setup documentation
+├── gradle/                     # Gradle wrapper binaries & properties
+├── qa/                         # Automated QA captures & lifecycle audit logs
+├── tools/                      # Assistant emulator & registration check scripts
+├── build.gradle.kts            # Root project build configuration
+├── gradle.properties           # JVM & Gradle memory settings
+├── gradlew / gradlew.bat       # Gradle wrapper executables
+└── settings.gradle.kts         # Root project settings
 ```
 
 ---
