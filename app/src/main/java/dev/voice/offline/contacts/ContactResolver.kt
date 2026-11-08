@@ -102,16 +102,15 @@ class ContactResolver(
     }
 
     private fun parseQueryType(query: String): Pair<String, PhoneType> {
-        val lower = query.lowercase()
-        return when {
-            lower.endsWith(" on mobile") || lower.endsWith(" mobile") ->
-                Pair(query.substring(0, query.lastIndexOf("m", ignoreCase = true)).trim().removeSuffix("on").trim(), PhoneType.MOBILE)
-            lower.endsWith(" on home") || lower.endsWith(" at home") || lower.endsWith(" home") ->
-                Pair(query.substring(0, query.lastIndexOf("h", ignoreCase = true)).trim().removeSuffix("at").removeSuffix("on").trim(), PhoneType.HOME)
-            lower.endsWith(" on work") || lower.endsWith(" at work") || lower.endsWith(" work") ->
-                Pair(query.substring(0, query.lastIndexOf("w", ignoreCase = true)).trim().removeSuffix("at").removeSuffix("on").trim(), PhoneType.WORK)
-            else -> Pair(query, PhoneType.ANY)
-        }
+        val mobileRegex = Regex("""^(.*?)\s+(?:on\s+|at\s+)?mobile$""", RegexOption.IGNORE_CASE)
+        val homeRegex = Regex("""^(.*?)\s+(?:on\s+|at\s+)?home$""", RegexOption.IGNORE_CASE)
+        val workRegex = Regex("""^(.*?)\s+(?:on\s+|at\s+)?work$""", RegexOption.IGNORE_CASE)
+
+        mobileRegex.find(query)?.let { return Pair(it.groupValues[1].trim(), PhoneType.MOBILE) }
+        homeRegex.find(query)?.let { return Pair(it.groupValues[1].trim(), PhoneType.HOME) }
+        workRegex.find(query)?.let { return Pair(it.groupValues[1].trim(), PhoneType.WORK) }
+
+        return Pair(query.trim(), PhoneType.ANY)
     }
 
     private fun selectNumber(numbers: List<ContactNumber>, preferred: PhoneType): String {

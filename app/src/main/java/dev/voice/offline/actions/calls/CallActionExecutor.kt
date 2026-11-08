@@ -38,33 +38,24 @@ class CallActionExecutor(
             return ExecutionResult.Failed("No contact name or phone number specified")
         }
 
-        // Fast path for raw phone numbers - no contacts permission needed
-        val isDirectDigits = rawTarget.filter { it.isDigit() }.length >= 3 &&
-                rawTarget.all { it.isDigit() || it in "+ -()." }
-
-        val (displayName, phoneNumber) = if (isDirectDigits) {
-            val cleanNumber = (if (rawTarget.startsWith("+")) "+" else "") + rawTarget.filter { it.isDigit() }
-            Pair(cleanNumber, cleanNumber)
-        } else {
-            if (!hasContactsPermission()) {
-                return ExecutionResult.RequiresPermission(
-                    Manifest.permission.READ_CONTACTS,
-                    "Read contacts permission required to look up $rawTarget"
+        val (displayName, phoneNumber) = when (val res = resolver.resolve(rawTarget)) {
+            is ContactResolution.DirectNumber -> Pair(res.phoneNumber, res.phoneNumber)
+            is ContactResolution.Resolved -> Pair(res.contact.displayName, res.selectedNumber)
+            is ContactResolution.Ambiguous -> {
+                val names = res.candidates.map { it.displayName }
+                return ExecutionResult.Ambiguous(
+                    names,
+                    "Multiple matching contacts found for '$rawTarget': ${names.joinToString()}"
                 )
             }
-            when (val res = resolver.resolve(rawTarget)) {
-                is ContactResolution.DirectNumber -> Pair(res.phoneNumber, res.phoneNumber)
-                is ContactResolution.Resolved -> Pair(res.contact.displayName, res.selectedNumber)
-                is ContactResolution.Ambiguous -> {
-                    val names = res.candidates.map { it.displayName }
-                    return ExecutionResult.Ambiguous(
-                        names,
-                        "Multiple matching contacts found for '$rawTarget': ${names.joinToString()}"
+            is ContactResolution.NotFound -> {
+                if (!hasContactsPermission()) {
+                    return ExecutionResult.RequiresPermission(
+                        Manifest.permission.READ_CONTACTS,
+                        "Read contacts permission required to look up $rawTarget"
                     )
                 }
-                is ContactResolution.NotFound -> {
-                    return ExecutionResult.Failed("No contact found matching '$rawTarget'")
-                }
+                return ExecutionResult.Failed("No contact found matching '$rawTarget'")
             }
         }
 
