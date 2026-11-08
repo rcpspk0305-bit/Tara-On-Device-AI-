@@ -36,7 +36,7 @@ function Tap-Text([string]$label) {
 
 switch ($Step) {
     'Install' {
-        Invoke-Adb install -r (Join-Path $root 'VoiceOffline/app/build/outputs/apk/offline/debug/app-offline-debug.apk')
+        Invoke-Adb install -r (Join-Path $root 'app/build/outputs/apk/offline/debug/app-offline-debug.apk')
         Invoke-Adb shell am start -n dev.voice.offline/.ui.MainActivity
     }
     'Inspect' {

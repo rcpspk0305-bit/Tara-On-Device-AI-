@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$main = Join-Path $root 'VoiceOffline/app/src/main'
-$mergedPath = Join-Path $root 'VoiceOffline/app/build/intermediates/merged_manifests/offlineDebug/processOfflineDebugManifest/AndroidManifest.xml'
+$main = Join-Path $root 'app/src/main'
+$mergedPath = Join-Path $root 'app/build/intermediates/merged_manifests/offlineDebug/processOfflineDebugManifest/AndroidManifest.xml'
 [xml]$manifest = Get-Content -LiteralPath $mergedPath -Raw
 [xml]$metadata = Get-Content -LiteralPath (Join-Path $main 'res/xml/voice_interaction_service.xml') -Raw
 $android = 'http://schemas.android.com/apk/res/android'
