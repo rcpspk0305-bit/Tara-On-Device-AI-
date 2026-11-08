@@ -7,6 +7,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -27,6 +28,8 @@ import dev.voice.offline.ai.stt.VoskSpeechRecognizer
 import dev.voice.offline.ai.wakeword.VoskWakeWordDetector
 import dev.voice.offline.ai.wakeword.WakeWordDetector
 import dev.voice.offline.ai.wakeword.WakeWordResult
+import dev.voice.offline.wakeword.OnnxWakeWordDetector
+import dev.voice.offline.tts.OfflineTextToSpeechEngine
 import dev.voice.offline.ai.stt.AssetModelInstaller
 import dev.voice.offline.core.audio.AudioRecordManager
 import dev.voice.offline.ui.security.AuthorizationActivity
@@ -105,12 +108,21 @@ class VoiceAssistantService : Service() {
     private lateinit var actionRegistry: ActionExecutorRegistry
     private lateinit var securityPolicy: SensitiveActionPolicy
     private var toneGenerator: ToneGenerator? = null
+    private var ttsEngine: OfflineTextToSpeechEngine? = null
 
     override fun onCreate() {
         super.onCreate()
         setupNotificationChannels()
         actionRegistry = ActionExecutorRegistry(applicationContext)
-        securityPolicy = SensitiveActionPolicy()
+        val prefs = getSharedPreferences("voice_app_prefs", Context.MODE_PRIVATE)
+        securityPolicy = SensitiveActionPolicy().apply {
+            directScreenLockEnabled = prefs.getBoolean("direct_screen_lock", true)
+        }
+        ttsEngine = try {
+            OfflineTextToSpeechEngine(applicationContext)
+        } catch (_: Exception) {
+            null
+        }
         toneGenerator = try {
             ToneGenerator(AudioManager.STREAM_NOTIFICATION, 30)
         } catch (_: Exception) {
@@ -190,7 +202,7 @@ class VoiceAssistantService : Service() {
                 val model = Model(modelDir.absolutePath)
                 voskModel = model
                 currentCoroutineContext().ensureActive()
-                if (mode == ListeningMode.HANDS_FREE) wakeWordDetector = VoskWakeWordDetector(model)
+                if (mode == ListeningMode.HANDS_FREE) wakeWordDetector = OnnxWakeWordDetector()
                 speechRecognizer = VoskSpeechRecognizer(model)
                 // Existing deterministic compatibility backend; no claim of real model inference.
                 functionGemmaEngine = FunctionGemmaEngine(EmulatedLiteRtInferenceAdapter())
@@ -297,7 +309,12 @@ class VoiceAssistantService : Service() {
                 chunks.close()
                 audioRecordManager = null
             }
-        }.also { if (it.isBlank()) _lastResultFlow.value = "No speech detected" }
+        }.also {
+            if (it.isBlank()) {
+                _lastResultFlow.value = "No speech detected"
+                ttsEngine?.explainFailure("No speech detected")
+            }
+        }
 
     private suspend fun processTranscriptAction(transcript: String, transition: (AssistantState) -> Unit) {
         val raw = transcript.trim().lowercase().replace(Regex("\\s+"), " ")
@@ -306,7 +323,9 @@ class VoiceAssistantService : Service() {
         if (commandText.isEmpty() || raw == "hey tara" || raw == "okay tara" || raw == "tara" || raw == "hello tara" || raw == "hi tara" || raw == "hey voice" || raw == "okay voice") {
             transition(AssistantState.CONFIRMING)
             playAckChime()
-            _lastResultFlow.value = "Hey! I'm Tara, your offline voice assistant. How can I help?"
+            val greeting = "Hey! I'm Tara, your offline voice assistant. How can I help?"
+            _lastResultFlow.value = greeting
+            ttsEngine?.speak(greeting)
             return
         }
 
@@ -317,8 +336,16 @@ class VoiceAssistantService : Service() {
                 currentCoroutineContext().ensureActive()
                 dispatchAction(result.action, transition)
             }
-            is FunctionGemmaResult.Rejected -> _lastResultFlow.value = "Command not recognized: ${result.reason}"
-            is FunctionGemmaResult.Error -> _lastResultFlow.value = "Command processing failed: ${result.error.message}"
+            is FunctionGemmaResult.Rejected -> {
+                val msg = "Command not recognized: ${result.reason}"
+                _lastResultFlow.value = msg
+                ttsEngine?.explainFailure(msg)
+            }
+            is FunctionGemmaResult.Error -> {
+                val msg = "Command processing failed: ${result.error.message ?: "unknown error"}"
+                _lastResultFlow.value = msg
+                ttsEngine?.explainFailure(msg)
+            }
         }
     }
 
@@ -326,8 +353,10 @@ class VoiceAssistantService : Service() {
         if (!isRunning.get()) return
         if (securityPolicy.requiresUserInteraction(action)) {
             transition(AssistantState.AUTHORIZING)
-            _lastResultFlow.value = if (requestUserAuthorization(action)) "Action pending approval"
+            val msg = if (requestUserAuthorization(action)) "Action pending approval"
                 else "Enable action approval notifications"
+            _lastResultFlow.value = msg
+            ttsEngine?.speak(msg)
         } else {
             transition(AssistantState.EXECUTING)
             val outcome = actionRegistry.execute(action)
@@ -335,7 +364,11 @@ class VoiceAssistantService : Service() {
             if (outcome.isAccepted) {
                 transition(AssistantState.CONFIRMING)
                 playAckChime()
-            } else notifyAlert(outcome.message)
+                ttsEngine?.confirmSuccess(outcome.message)
+            } else {
+                notifyAlert(outcome.message)
+                ttsEngine?.explainFailure(outcome.message)
+            }
         }
     }
 
@@ -466,6 +499,8 @@ class VoiceAssistantService : Service() {
         completeInvocation(_lastResultFlow.value ?: "Interaction cancelled")
         stopForeground(STOP_FOREGROUND_REMOVE)
         toneGenerator?.release()
+        ttsEngine?.close()
+        ttsEngine = null
         super.onDestroy()
     }
 

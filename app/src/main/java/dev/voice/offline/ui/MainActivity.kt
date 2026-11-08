@@ -359,6 +359,12 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO_PERMISSION)
         } else {
             try {
+                if (requestedHandsFree) {
+                    getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("hands_free_enabled", true)
+                        .apply()
+                }
                 startForegroundService(
                     Intent(this, VoiceAssistantService::class.java)
                         .setAction(if (requestedHandsFree) VoiceAssistantService.ACTION_HANDS_FREE else VoiceAssistantService.ACTION_START)
@@ -373,6 +379,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleStopListening() {
         requestedHandsFree = false
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("hands_free_enabled", false)
+            .apply()
         stopService(Intent(this, VoiceAssistantService::class.java))
     }
 
