@@ -1,0 +1,163 @@
+{
+  "date": "2026-11-09",
+  "branch": "codex/tara-phase-one",
+  "baseCommit": "307875def855d01f3a438d030ad69a6ed8c5653d",
+  "unitTests": [
+    {
+      "name": "dev.tara.domain.ActionContractsTest",
+      "tests": 23,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "dev.tara.domain.CommandParserTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "dev.tara.audio.CaptureSessionTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "dev.tara.permissions.PermissionClassificationTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "dev.tara.androidactions.AppTargetMatcherTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "dev.tara.app.AssistantViewModelTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "instrumentation": [
+    {
+      "Suite": "app",
+      "Passed": 4,
+      "Skipped": 1,
+      "Failed": false
+    },
+    {
+      "Suite": "onboarding",
+      "Passed": 2,
+      "Skipped": 0,
+      "Failed": false
+    },
+    {
+      "Suite": "assistant",
+      "Passed": 3,
+      "Skipped": 0,
+      "Failed": false
+    },
+    {
+      "Suite": "androidactions",
+      "Passed": 8,
+      "Skipped": 0,
+      "Failed": false
+    }
+  ],
+  "emulator": {
+    "api": 37,
+    "release": "Android 17",
+    "name": "Medium_Phone",
+    "pageSizeBytes": 16384
+  },
+  "lint": [
+    {
+      "module": "app",
+      "warnings": 22
+    },
+    {
+      "module": "core/audio",
+      "warnings": 0
+    },
+    {
+      "module": "core/permissions",
+      "warnings": 0
+    },
+    {
+      "module": "core/designsystem",
+      "warnings": 0
+    },
+    {
+      "module": "platform/androidactions",
+      "warnings": 0
+    },
+    {
+      "module": "data/settings",
+      "warnings": 0
+    },
+    {
+      "module": "feature/assistant",
+      "warnings": 0
+    },
+    {
+      "module": "feature/onboarding",
+      "warnings": 0
+    },
+    {
+      "module": "feature/privacy",
+      "warnings": 0
+    },
+    {
+      "module": "feature/settings",
+      "warnings": 0
+    }
+  ],
+  "apk": {
+    "path": "app/build/outputs/apk/debug/app-debug.apk",
+    "bytes": 29250347,
+    "sha256": "def90a8fafc725c8c68339bb9ca047459cf507496fc3c398333f3476831d5d2c",
+    "zipAlignment16k": true,
+    "nativeLibraries": [
+      {
+        "name": "lib/arm64-v8a/libandroidx.graphics.path.so",
+        "loadAlignments": [
+          16384,
+          16384,
+          16384
+        ]
+      },
+      {
+        "name": "lib/arm64-v8a/libdatastore_shared_counter.so",
+        "loadAlignments": [
+          16384,
+          16384,
+          16384
+        ]
+      },
+      {
+        "name": "lib/x86_64/libandroidx.graphics.path.so",
+        "loadAlignments": [
+          16384,
+          16384,
+          16384
+        ]
+      },
+      {
+        "name": "lib/x86_64/libdatastore_shared_counter.so",
+        "loadAlignments": [
+          16384,
+          16384
+        ]
+      }
+    ]
+  },
+  "hardwareAcceptance": "pending"
+}
