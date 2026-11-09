@@ -27,7 +27,10 @@ class SensitiveActionPolicy {
             is StructuredAction.TurnFlashlightOn,
             is StructuredAction.TurnFlashlightOff,
             is StructuredAction.TakeNotes,
-            is StructuredAction.OpenApp -> ActionRiskLevel.LOW
+            is StructuredAction.OpenApp,
+            is StructuredAction.OpenSettings,
+            is StructuredAction.AdjustVolume,
+            StructuredAction.NavigateHome -> ActionRiskLevel.LOW
 
             is StructuredAction.MakeCall,
             is StructuredAction.SetAlarm,
@@ -47,11 +50,19 @@ class SensitiveActionPolicy {
         return getRiskLevel(action) == ActionRiskLevel.HIGH
     }
 
-    fun requiresUserInteraction(action: StructuredAction): Boolean = requiresBiometrics(action) || when (action) {
-        is StructuredAction.MakeCall,
-        is StructuredAction.OpenApp,
-        is StructuredAction.SetAlarm,
-        StructuredAction.OpenCamera -> true
-        else -> false
+    var directScreenLockEnabled: Boolean = false
+
+    fun requiresUserInteraction(action: StructuredAction): Boolean {
+        if (action is StructuredAction.LockScreen && directScreenLockEnabled) {
+            return false
+        }
+        return requiresBiometrics(action) || when (action) {
+            is StructuredAction.MakeCall,
+            is StructuredAction.OpenApp,
+            is StructuredAction.OpenSettings,
+            is StructuredAction.SetAlarm,
+            StructuredAction.OpenCamera -> true
+            else -> false
+        }
     }
 }

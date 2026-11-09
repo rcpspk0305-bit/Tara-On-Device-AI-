@@ -7,9 +7,12 @@ import dev.voice.offline.actions.calls.CallActionExecutor
 import dev.voice.offline.actions.camera.CameraActionExecutor
 import dev.voice.offline.actions.flashlight.FlashlightActionExecutor
 import dev.voice.offline.actions.messaging.MessagingActionExecutor
+import dev.voice.offline.actions.navigation.NavigationActionExecutor
 import dev.voice.offline.actions.notes.NoteActionExecutor
 import dev.voice.offline.actions.notifications.NotificationActionExecutor
 import dev.voice.offline.actions.screen.ScreenActionExecutor
+import dev.voice.offline.actions.settings.SettingsActionExecutor
+import dev.voice.offline.actions.volume.VolumeActionExecutor
 import dev.voice.offline.ai.functioncalling.StructuredAction
 
 /**
@@ -27,6 +30,9 @@ class ActionExecutorRegistry(private val context: Context) {
     private val alarmExecutor = AlarmActionExecutor(context)
     private val noteExecutor = NoteActionExecutor(context)
     private val appExecutor = AppActionExecutor(context)
+    private val settingsExecutor = SettingsActionExecutor(context)
+    private val volumeExecutor = VolumeActionExecutor(context)
+    private val navigationExecutor = NavigationActionExecutor(context)
 
     fun execute(action: StructuredAction): ExecutionResult {
         return try { when (action) {
@@ -43,6 +49,9 @@ class ActionExecutorRegistry(private val context: Context) {
             is StructuredAction.TextMsg -> messagingExecutor.sendText(action)
             StructuredAction.ReadNotifications -> notificationExecutor.readNotifications()
             is StructuredAction.ReplyToNotification -> notificationExecutor.replyToNotification(action)
+            is StructuredAction.OpenSettings -> settingsExecutor.openSettings(action)
+            is StructuredAction.AdjustVolume -> volumeExecutor.adjustVolume(action)
+            StructuredAction.NavigateHome -> navigationExecutor.navigateHome()
         } } catch (_: SecurityException) {
             ExecutionResult.Failed("Permission or device policy denied")
         } catch (error: Exception) {

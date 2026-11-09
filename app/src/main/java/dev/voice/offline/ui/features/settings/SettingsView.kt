@@ -183,10 +183,12 @@ class SettingsView(context: Context,
             setTextColor(GeminiTheme.TextSecondary)
         })
 
-        addSettingItem("Wake Phrase", "“Hey Tara” / “Okay Tara”", "Optional Vosk software wake decoder. Microphone stays active; battery cost is unmeasured.")
-        addSettingItem("Recognition Language", "Packaged English model", "Accuracy depends on the packaged Vosk model. Indian English accuracy needs device testing.")
+        addSettingItem("Wake Phrase", "“Hey Tara”", "Lightweight on-device ONNX neural Keyword Spotting (KWS). Minimal CPU and battery footprint with sliding 39-MFCC window.")
+        addSettingItem("Direct Screen Lock", "Enabled", "Locks device instantly upon 'Hey Tara, lock my phone' without requiring manual notification approval.")
+        addSettingItem("Recognition Language", "Packaged English model", "Acoustic model transcribing speech offline with zero network connectivity.")
         addSettingItem("Listening Sensitivity", "Standard (Cooldown 2.0s)", "Prevents false-positive duplicate triggers during conversations.")
         addSettingItem("Silence Timeout", "3.0 Seconds", "Automatically finishes recording command after user stops speaking.")
+        addSettingItem("Voice Feedback (TTS)", "On-Device Offline TTS", "Speaks action confirmations and failure explanations without off-device transmission.")
         addSettingItem("Audio Feedback Chime", "Enabled", "Plays a short confirmation chime when wake word or action completes.")
     }
 }

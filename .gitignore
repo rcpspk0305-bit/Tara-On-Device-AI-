@@ -7,3 +7,7 @@ local.properties
 captures/
 app/src/main/assets/vosk-model/*
 !app/src/main/assets/vosk-model/README.txt
+qa/*.log
+qa/assistant-lifecycle/*.txt
+qa/assistant-lifecycle/*.xml
+

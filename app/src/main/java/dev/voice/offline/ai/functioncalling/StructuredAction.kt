@@ -61,6 +61,18 @@ sealed interface StructuredAction {
         override val functionName: String = "reply_to_notification"
     }
 
+    data class OpenSettings(val settingType: String = "general") : StructuredAction {
+        override val functionName: String = "open_settings"
+    }
+
+    data class AdjustVolume(val direction: String, val percent: Int? = null) : StructuredAction {
+        override val functionName: String = "adjust_volume"
+    }
+
+    data object NavigateHome : StructuredAction {
+        override val functionName: String = "navigate_home"
+    }
+
     fun toNormalizedJson(): String {
         val root = JSONObject()
         root.put("schema_version", 1)
@@ -91,6 +103,12 @@ sealed interface StructuredAction {
                 args.put("notification_id", notificationId)
                 args.put("body", body)
             }
+            is OpenSettings -> args.put("setting_type", settingType)
+            is AdjustVolume -> {
+                args.put("direction", direction)
+                percent?.let { args.put("percent", it) }
+            }
+            is NavigateHome -> Unit
         }
         root.put("arguments", args)
         return root.toString()

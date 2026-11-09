@@ -84,6 +84,24 @@ object ActionFunctionDeclaration {
             description = "Reply to an active notification with a specified message body",
             properties = listOf("notification_id" to "STRING", "body" to "STRING"),
             required = listOf("notification_id", "body")
+        ),
+        declaration(
+            name = "open_settings",
+            description = "Open device settings with optional category like wifi, bluetooth, display, sound",
+            properties = listOf("setting_type" to "STRING"),
+            required = emptyList()
+        ),
+        declaration(
+            name = "adjust_volume",
+            description = "Adjust media volume with direction (up, down, mute, unmute, set) and optional percent",
+            properties = listOf("direction" to "STRING", "percent" to "INTEGER"),
+            required = listOf("direction")
+        ),
+        declaration(
+            name = "navigate_home",
+            description = "Navigate to the device Home screen",
+            properties = emptyList(),
+            required = emptyList()
         )
     )
 

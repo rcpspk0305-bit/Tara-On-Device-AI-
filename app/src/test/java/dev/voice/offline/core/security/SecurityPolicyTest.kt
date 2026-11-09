@@ -30,6 +30,14 @@ class SecurityPolicyTest {
     }
 
     @Test
+    fun directScreenLockCanBeEnabledForHandsFreeDeviceAdminExecution() {
+        val policy = SensitiveActionPolicy()
+        assertTrue(policy.requiresUserInteraction(StructuredAction.LockScreen))
+        policy.directScreenLockEnabled = true
+        assertFalse(policy.requiresUserInteraction(StructuredAction.LockScreen))
+    }
+
+    @Test
     fun testDefaultActionRiskLevels() {
         val policy = SensitiveActionPolicy()
 
