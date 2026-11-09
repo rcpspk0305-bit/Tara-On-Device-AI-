@@ -1,21 +1,17 @@
-name: Android checks
-
+name: Tara Phase 1 checks
 on:
   push:
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
-  group: android-${{ github.workflow }}-${{ github.ref }}
+  group: tara-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,37 +21,54 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
-      - name: Install Android SDK
+      - name: Install SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
-      - name: Run unit tests, lint, and build
-        run: bash ./gradlew testOfflineDebugUnitTest lintOfflineDebug assembleOfflineDebug --no-daemon --console=plain --continue
-      - name: Require discovered unit tests
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-          reports = list(Path('app/build/test-results/testOfflineDebugUnitTest').glob('TEST-*.xml'))
-          suites = [ET.parse(report).getroot() for report in reports]
-          assert sum(int(suite.get('tests', 0)) for suite in suites) > 0, 'No unit tests executed'
-          assert all(int(suite.get('failures', 0)) + int(suite.get('errors', 0)) == 0 for suite in suites)
-          PY
-      - name: Upload reports
-        if: ${{ !cancelled() }}
+      - name: Unit tests, lint and compilation
+        run: bash ./gradlew :core:domain:test testDebugUnitTest lintDebug :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --console=plain --continue
+      - name: Verify test discovery
+        run: python3 tools/check-phase1-tests.py
+      - name: Upload diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-reports
+          name: tara-phase1-diagnostics
           path: |
-            app/build/reports/
-            app/build/test-results/
+            **/build/reports/
+            **/build/test-results/
           if-no-files-found: warn
-          retention-days: 7
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: voice-offline-debug
-          path: app/build/outputs/apk/offline/debug/*.apk
+          name: tara-phase1-debug
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 7
+  instrumentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          profile: pixel_6
+          script: bash ./gradlew :app:connectedDebugAndroidTest :feature:onboarding:connectedDebugAndroidTest :feature:assistant:connectedDebugAndroidTest :platform:androidactions:connectedDebugAndroidTest --no-daemon --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tara-instrumentation
+          path: '**/build/reports/androidTests/'

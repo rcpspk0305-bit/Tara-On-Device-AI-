@@ -5,6 +5,9 @@
 local.properties
 *.iml
 captures/
+qa/phase1/*.log
+qa/phase1/*.txt
+qa/phase1/*.xml
 app/src/main/assets/vosk-model/*
 !app/src/main/assets/vosk-model/README.txt
 qa/*.log
