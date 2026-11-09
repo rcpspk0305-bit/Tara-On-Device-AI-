@@ -1,187 +1,43 @@
-# Voice — Offline AI Mobile Assistant
+# Tara — Android voice agent
 
-> **Private. Responsive. Offline.**  
-> An actions-first native Android voice assistant powered by Google's **FunctionGemma 270M Mobile Actions** and **LiteRT-LM**.
+Phase 1: local typed commands, explicitly on-device push-to-talk where Android supports it, and real Android action adapters. No network permission, model download, background microphone service, wake word, direct calling or SMS delivery.
 
----
+Local verification: **49 JVM tests passed; 17 instrumentation tests passed, 1 conditional skip**, on the available API 37 emulator. Build, lint and 16 KB alignment checks pass; 22 unsuppressed upgrade/compatibility warnings remain. Physical device and API 29–36 acceptance are still pending. See the [verification report](qa/phase1/REPORT.md).
 
-## Overview
+## Build and run
 
-**Implementation status:** The active service currently uses `EmulatedLiteRtInferenceAdapter`,
-a deterministic rule-based fallback. Native LiteRT-LM inference and FunctionGemma model loading
-are not integrated. Downloading a model does not enable inference in this checkout. JVM tests
-exercise the fallback and application logic; they do not establish model accuracy, device
-compatibility, hardware-backed security, or release readiness.
+Use Android Studio supporting AGP 8.13.2, JDK 17, SDK Platform 36 and Build Tools 35.0.0+. Open this directory (the isolated worktree when applicable), not the original legacy checkout. Set Android Studio's Gradle JDK to 17. Create an untracked local.properties with sdk.dir pointing at your SDK, or set ANDROID_HOME.
 
-**Microphone and assistant lifecycle:** Manual activation captures one command, releases AudioRecord
-before processing, and stops the foreground worker afterward. Settings offers a separate disclosed
-software hands-free mode and the Android default-assistant role request. See
-[implementation, verification, and device limitations](docs/ASSISTANT_LIFECYCLE.md).
+Windows PowerShell:
 
-**Voice** is an on-device, actions-first mobile agent for Android. Unlike conversational chatbots that require cloud infrastructure, Voice processes speech, understands intent, validates tool schemas, and executes native Android commands **100% locally on your phone**.
+~~~powershell
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-17'
+.\gradlew.bat testDebugUnitTest :core:domain:test lintDebug assembleDebug
+.\gradlew.bat :app:installDebug
+adb shell am start -n dev.voice.offline/dev.tara.app.MainActivity
+~~~
 
-- **Zero Cloud Latency & Zero Telemetry**: The `offline` flavor does not include `android.permission.INTERNET`. Your voice never leaves your device.
-- **FunctionGemma 270M**: Uses Google's fine-tuned FunctionGemma model to perform deterministic function calling across 13 native mobile tools.
-- **Hardware-Backed Biometrics**: High-risk actions (SMS, messaging replies, device lock) are protected by Android Keystore EC P-256 signatures and `BiometricPrompt` (`BIOMETRIC_STRONG`).
-- **Android 14/15/16 Compliant**: Strict `FOREGROUND_SERVICE_MICROPHONE` lifecycle management with persistent notifications, interactive controls, and zero illegal background activity launches.
+Linux/macOS: use JDK 17 and bash ./gradlew with the same task names. Debug APK: app/build/outputs/apk/debug/app-debug.apk. No signing keys are needed for debug. Release builds require your own signing configuration; production signing is deliberately not wired to the debug key.
 
----
+## Commands
 
-## Architecture
+| Command | Behavior |
+|---|---|
+| lock phone | Explicit admin setup, secure screen lock and confirmation required |
+| call +919876543210 | Opens dialer; user places call |
+| sms 9876543210 saying Meet at 5 PM | Shows exact recipient/body; opens composer only after confirmation |
+| open Camera | Resolves scoped launchable apps; asks when names collide |
+| flashlight on / flashlight off | Camera permission and actual torch hardware required |
+| volume up / volume down | Adjusts media volume on current audio route |
+| alarm for 7 am / alarm at 19:30 | Opens clock using local time; no claim that alarm was saved |
+| timer for 5 minutes | Opens clock; duration 1 second–24 hours |
 
-```mermaid
-flowchart LR
-    A[Microphone 16kHz PCM] --> B[AudioRingBuffer]
-    B --> C[VoskWakeWordDetector]
-    C -->|'Hey Tara'| D[VoskSpeechRecognizer VAD]
-    D -->|Transcript| E[FunctionCallingPromptBuilder]
-    E --> F[FunctionGemma 270M LiteRT-LM]
-    F --> G[FunctionCallParser]
-    G --> H[FunctionSchemaValidator]
-    H --> I{SensitiveActionPolicy}
-    I -->|Low Risk| J[ActionExecutorRegistry]
-    I -->|High Risk| K[BiometricPrompt + Keystore]
-    K -->|Authenticated| J
-    J --> L[Native Android Action]
-    L --> M[Audio Feedback Chime]
-```
+Choose contact number uses Android's phone-number picker without contacts permission. It fills the command editor; review and execute. Contact-name commands explain the picker route. Named contact resolution via contacts permission is not enabled in this phase. Ambiguous app/name resolutions are bounded to 30 seconds.
 
-For an in-depth breakdown of the audio pipeline, inference grammar, and native execution layers, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Tap the microphone to start and Stop to finish; Cancel discards capture. On API 31+ Tara uses only createOnDeviceSpeechRecognizer when available. Otherwise a real PCM capture diagnostic reports capture duration/amplitude, discards samples and leaves typed commands available. No fabricated transcripts and no network recognizer fallback. Android may require a locally installed language pack.
 
----
+## Source layout
 
-## Supported Voice Actions
+The active application source is app/src/phase1. Eleven modules separate domain, audio, permissions, design, Android adapters, settings and features. Legacy app/src/main/java and old assets remain in Git for reference and are excluded from the active build. Do not use historical offline/play flavor tasks or legacy wake-word/model setup instructions for Phase 1.
 
-Voice supports 13 native mobile actions with strict parameter schema validation:
-
-| Category | Example Voice Commands | Function Call | Risk Tier |
-| :--- | :--- | :--- | :--- |
-| **System** | _"Turn on flashlight"_, _"Torch on karo"_ | `turn_flashlight_on{}` | LOW |
-| **System** | _"Turn off flashlight"_, _"Torch light band karo"_ | `turn_flashlight_off{}` | LOW |
-| **System** | _"Lock the screen"_, _"Lock device"_ | `lock_screen{}` | HIGH (Biometrics) |
-| **Telephony**| _"Call Rahul"_, _"Papa ko call lagao"_ | `make_call{contact_name}` | MEDIUM |
-| **Telephony**| _"Answer call"_, _"Reject call"_ | `answer_call{}`, `reject_call{}` | MEDIUM |
-| **Messaging**| _"Send SMS to Mom saying I will be late"_ | `text_msg{contact_name, body}` | HIGH (Biometrics) |
-| **Messaging**| _"Reply to Alice saying On my way"_ | `reply_to_notification{id, body}` | HIGH (Biometrics) |
-| **Camera** | _"Take a selfie"_, _"Photo kheecho"_ | `open_camera{}` | LOW |
-| **Alarms** | _"Set alarm for 7 AM"_, _"Alarm lagao 8:30"_ | `set_alarm{hour, minute, label}` | MEDIUM |
-| **Notes** | _"Take a note buy groceries"_ | `take_notes{content}` (AES Encrypted) | LOW |
-| **Apps** | _"Open WhatsApp"_, _"Launch Camera"_ | `open_app{package_name}` | LOW |
-
----
-
-## Quickstart & Build Instructions
-
-### Prerequisites
-1. **Android Studio** (Ladybug / Jellyfish or newer)
-2. **JDK 17**
-3. **Android SDK Platform 36** (API 36)
-4. A physical Android device running **Android 11 (API 30) or higher** (Android 14+ recommended).
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/rcpspk0305-bit/Tara-On-Device-AI-.git
-cd Tara-On-Device-AI-
-```
-
-### 2. Configure Local Properties
-Create `local.properties`:
-```properties
-sdk.dir=C\:\\Users\\<YourUsername>\\AppData\\Local\\Android\\Sdk
-```
-
-### 3. Build & Run Tests
-```powershell
-# Windows PowerShell
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
-.\gradlew.bat testOfflineDebugUnitTest
-```
-To assemble the offline debug APK:
-```powershell
-.\gradlew.bat assembleOfflineDebug
-```
-
----
-
-## Project Structure
-
-The project follows a standard root-level Gradle layout and a modular, clean-architecture Kotlin package structure:
-
-```
-Tara- On Device AI/
-├── .github/workflows/          # Continuous integration (build, unit tests, lint)
-├── app/                        # Android application module
-│   ├── src/main/
-│   │   ├── assets/             # On-device Vosk models
-│   │   ├── java/dev/voice/offline/
-│   │   │   ├── actions/        # 13 native action handlers & ActionExecutorRegistry
-│   │   │   ├── ai/             # STT, Vosk wake word, FunctionGemma & prompt parsing
-│   │   │   │   ├── benchmark/  # Model benchmarking & latency metrics
-│   │   │   │   ├── commands/   # Intent parsing & command schema definitions
-│   │   │   │   ├── functioncalling/ # Schema validator, parser & function declarations
-│   │   │   │   ├── functiongemma/   # LiteRT inference adapter & model manager
-│   │   │   │   ├── stt/        # Offline speech recognizer & asset model installer
-│   │   │   │   └── wakeword/   # Offline wake word detection ('Hey Tara')
-│   │   │   ├── assistant/      # VoiceInteractionService, session & role managers
-│   │   │   ├── core/           # Low-level infrastructure & hardware bindings
-│   │   │   │   ├── audio/      # AudioRecordManager, ring buffer, MFCC extractor
-│   │   │   │   ├── security/   # Keystore AES-256, BiometricPrompt, pending commands
-│   │   │   │   ├── storage/    # Encrypted private note store
-│   │   │   │   └── system/     # System receivers & notification reply listeners
-│   │   │   ├── service/        # Foreground microphone worker & session controller
-│   │   │   └── ui/             # Presentation layer
-│   │   │       ├── components/ # Tara visualizer & orb views
-│   │   │       ├── features/   # Home, Commands, Notes, Permissions, Settings, Security
-│   │   │       ├── security/   # Biometric AuthorizationActivity
-│   │   │       └── theme/      # TaraTheme design tokens
-│   │   └── res/                # Vector drawables, XML service & admin configs
-│   ├── build.gradle.kts        # App build configuration & dependencies
-│   └── proguard-rules.pro      # Code shrinking & obfuscation rules
-├── docs/                       # Architecture, security, and setup documentation
-├── gradle/                     # Gradle wrapper binaries & properties
-├── qa/                         # Automated QA captures & lifecycle audit logs
-├── tools/                      # Assistant emulator & registration check scripts
-├── build.gradle.kts            # Root project build configuration
-├── gradle.properties           # JVM & Gradle memory settings
-├── gradlew / gradlew.bat       # Gradle wrapper executables
-└── settings.gradle.kts         # Root project settings
-```
-
----
-
-## Model Setup & Installation
-
-Voice requires two lightweight on-device models:
-1. **Vosk Speech Recognition Model**: Download `vosk-model-small-en-us-0.15.zip` from [Vosk Models](https://alphacephei.com/vosk/models) and extract into `app/src/main/assets/vosk-model/`.
-2. **FunctionGemma 270M Model**: Download `functiongemma-270m-mobile-actions.bin` from [Hugging Face (`litert-community/functiongemma-270m-ft-mobile-actions`)](https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions) and push to `/sdcard/Android/data/dev.voice.offline/files/models/`.
-
-Detailed step-by-step instructions with SHA-256 verification and ADB commands are available in [MODEL_SETUP.md](docs/MODEL_SETUP.md).
-
----
-
-## Security & Privacy Assurance
-
-- **Zero Network Traffic**: The `offline` flavor does not declare or request `android.permission.INTERNET`.
-- **Encrypted Local Storage**: Notes created via voice commands are encrypted using AES-256-GCM backed by hardware Keystore keys.
-- **Replay Protection**: High-risk commands expire automatically after 30 seconds (`PendingCommandStore`).
-- **Input Validation**: Function-call parsing and schema validation have JVM regression coverage. The fixed evaluation dataset exercises the emulated adapter and is not a general prompt-injection guarantee.
-
-Read the complete security specification in [SECURITY.md](docs/SECURITY.md).
-
----
-
-## Documentation Index
-
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — Comprehensive technical architecture and pipeline design.
-- [MODEL_SETUP.md](docs/MODEL_SETUP.md) — FunctionGemma 270M and Vosk model download and setup guide.
-- [SECURITY.md](docs/SECURITY.md) — Threat model, Keystore signing, and prompt injection defenses.
-- [PERMISSIONS.md](docs/PERMISSIONS.md) — Exhaustive permissions audit and Android 14/15/16 compliance.
-- [TESTING.md](docs/TESTING.md) — Test strategy and 57-case linguistic evaluation report.
-- [PERFORMANCE.md](docs/PERFORMANCE.md) — Latency budget (<1500ms), RAM budget (<350MB), and device tiers.
-- [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) — Pre-flight distribution and policy checklist.
-
----
-
-## License
-
-This project is licensed under the Apache 2.0 License. See [LICENSE](LICENSE) for details.
+See [architecture](docs/ARCHITECTURE.md), [permissions](docs/PERMISSIONS.md), [security](docs/SECURITY.md), [testing](docs/TESTING.md), [roadmap](docs/ROADMAP.md), and [verification report](qa/phase1/REPORT.md).

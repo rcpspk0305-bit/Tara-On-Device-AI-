@@ -1,58 +1,23 @@
-# Permissions & Background Execution Audit — Voice
+# Phase 1 permissions and compatibility
 
-## 1. Overview of Permissions
+| Manifest access | Purpose | User intervention |
+|---|---|---|
+| RECORD_AUDIO | Foreground push-to-talk or PCM diagnostic | Runtime request only after user selects access |
+| CAMERA | CameraManager torch control | Runtime request at point of use |
+| MODIFY_AUDIO_SETTINGS | Media volume and audio focus | Normal permission |
+| com.android.alarm.permission.SET_ALARM | Clock app alarm/timer intents | Normal permission; review clock UI |
+| BIND_DEVICE_ADMIN on receiver | Protect force-lock receiver | Explicit Android admin activation; not a runtime permission |
 
-Voice strictly requests only permissions required to execute the user's explicit voice commands. All permissions are audited, explained to the user before request, and handled with graceful degradation.
+Only force-lock is declared in the device-admin policy. Tara does not request device-owner status. A secure PIN/pattern/password must be configured before lock. Deactivate Tara in Android device-admin settings before uninstalling if it was activated.
 
----
+No INTERNET, QUERY_ALL_PACKAGES, READ_CONTACTS, SEND_SMS, READ_SMS, Call Log, CALL_PHONE, ANSWER_PHONE_CALLS, foreground-service or notification-listener permissions are included. Direct calling is disabled; a future opt-in route would need a separate policy and permission review. Android's phone picker grants access to the selected number only.
 
-## 2. Permissions Matrix
+Dashboard checks the OS on each resume and again at execution. Status includes granted, denied, permanently denied, revoked and unavailable. Requests happen only after a visible user action. Permanent denials link to app settings; admin and secure-lock setup open their dedicated Android screens.
 
-| Permission | Category | Purpose | Fallback if Denied |
-| :--- | :--- | :--- | :--- |
-| `android.permission.RECORD_AUDIO` | **CORE (Mandatory)** | Continuous 16 kHz Mono PCM audio recording for local wake word and speech recognition. | Service cannot start; user prompted with explanation dialog. |
-| `android.permission.FOREGROUND_SERVICE` | **CORE (Mandatory)** | Keeps assistant listening active in foreground with user visibility. | Cannot run continuous listening in background. |
-| `android.permission.FOREGROUND_SERVICE_MICROPHONE` | **CORE (Android 14+)** | Specifies microphone foreground service type as required by Android 14 (API 34)+. | Service start throws SecurityException. |
-| `android.permission.POST_NOTIFICATIONS` | **CORE (Android 13+)** | Shows ongoing listening status notification and biometric authorization prompts. | Biometric approval prompts cannot be delivered interactively. |
-| `android.permission.READ_CONTACTS` | **OPTIONAL** | Resolves contact names for "Call [Name]" and "Message [Name]". | Calls and messages must specify raw numeric phone numbers. |
-| `android.permission.CALL_PHONE` | **OPTIONAL** | Initiates direct voice calls when user commands "Call Mom". | Dispatches ACTION_DIAL intent to dialer without placing call automatically. |
-| `android.permission.ANSWER_PHONE_CALLS` | **OPTIONAL** | Answers incoming phone calls when user commands "Answer call". | Command reports unsupported / permission denied. |
-| `android.permission.CAMERA` | **OPTIONAL** | Opens camera and controls LED torch for "Turn on flashlight". | Flashlight and camera commands fail with descriptive error. |
-| `android.permission.SCHEDULE_EXACT_ALARM` | **OPTIONAL** | Sets alarms for exact requested times without power manager delay. | Alarms use inexact scheduling. |
-| `android.permission.USE_BIOMETRIC` | **SECURITY** | Authenticates high-risk actions via fingerprint or face unlock. | High-risk actions fail closed. |
-| `BIND_DEVICE_ADMIN` | **OPTIONAL (Special)** | Locks screen securely upon user command "Lock screen". | Screen lock command reports permission required. |
-| `BIND_NOTIFICATION_LISTENER_SERVICE` | **OPTIONAL (Special)** | Reads notifications and sends inline replies via RemoteInput. | Notification actions unavailable. |
+| Android API | Speech | Actions/UI |
+|---|---|---|
+| 29–30 | Real capture diagnostic plus typed commands | All eight adapters subject to hardware, admin and target-app availability |
+| 31–35 | Explicit on-device recognition if available; diagnostic otherwise | Same; mic privacy switch, permission revocation and policy restrictions respected |
+| 36 | Same on-device-only contract | Target/compile SDK 36, edge-to-edge and predictive back enabled |
 
----
-
-## 3. Background Execution & Android 14/15/16 Compliance
-
-### 3.1 Foreground Service Microphone Rules (API 34+)
-Android 14 introduced strict policies preventing background services from starting microphone capture without foreground visibility:
-- **Rule 1**: The service is declared in `AndroidManifest.xml` with:
-  ```xml
-  <service
-      android:name=".VoiceAssistantService"
-      android:exported="false"
-      android:foregroundServiceType="microphone" />
-  ```
-- **Rule 2**: `VoiceAssistantService` is started only from a visible, focused `Activity` (e.g. `MainActivity`), never from `BOOT_COMPLETED` broadcast receiver or background alarms.
-- **Rule 3**: `startForeground()` is called within 5 seconds of service start, attaching an ongoing `PRIORITY_LOW` notification with an interactive **Stop** action.
-
-### 3.2 Background Activity Launch Restrictions
-Android restricts background services from launching activities directly (e.g. starting a biometric prompt while the phone is in a pocket or on home screen):
-- **Compliance Pattern**:
-  1. High-risk command received $\rightarrow$ Stored in `PendingCommandStore` (30s TTL).
-  2. Service posts high-priority notification with `PendingIntent` targeting `AuthorizationActivity`.
-  3. The **user taps the notification** to launch `AuthorizationActivity` in the foreground.
-  4. Once authenticated, the action is dispatched and the activity closes gracefully.
-
----
-
-## 4. Permissions Disclosure Flow
-
-All permissions are exposed through the dedicated **Permissions Screen** (`PermissionsView`) in the app:
-- Real-time status indicators (Granted / Missing).
-- Human-readable explanation of why each permission is needed.
-- One-tap buttons to trigger standard runtime permission dialogs or deep-link to device settings.
-- Zero dark patterns: Denied optional permissions never lock out core functionality.
+Tablet, foldable, fixed-volume and telephony-free devices may lack individual capabilities; the app reports this without claiming completion. Emulator testing cannot replace OEM hardware testing.

@@ -1,0 +1,26 @@
+﻿[
+    {
+        "Suite":  "app",
+        "Passed":  4,
+        "Skipped":  1,
+        "Failed":  false
+    },
+    {
+        "Suite":  "onboarding",
+        "Passed":  2,
+        "Skipped":  0,
+        "Failed":  false
+    },
+    {
+        "Suite":  "assistant",
+        "Passed":  3,
+        "Skipped":  0,
+        "Failed":  false
+    },
+    {
+        "Suite":  "androidactions",
+        "Passed":  8,
+        "Skipped":  0,
+        "Failed":  false
+    }
+]
